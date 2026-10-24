@@ -1,0 +1,8 @@
+---
+
+paths:
+  '**/*':
+    ignore:
+      # actionlint doesn't support GitHub's self-repository syntax
+      # (`uses: $/...`) yet, but zizmor recommends it
+      - 'specifying action "\$/.*" in invalid format'

@@ -1,0 +1,11 @@
+---
+
+name: Pass
+description: Lint fixture that should pass
+
+runs:
+  using: composite
+  steps:
+    - name: Say hello
+      shell: bash
+      run: echo hello

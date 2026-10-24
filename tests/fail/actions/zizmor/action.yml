@@ -1,0 +1,12 @@
+---
+
+name: Fail
+description: Lint fixture that should fail
+
+runs:
+  using: composite
+  steps:
+    - name: Say title
+      shell: bash
+      # Expected to fail zizmor template-injection: an issue title is attacker-controlled
+      run: echo "${{ github.event.issue.title }}"

@@ -1,0 +1,4 @@
+---
+
+# Expected to fail trailing-spaces: the next line ends in spaces
+hello: world   

@@ -1,0 +1,289 @@
+# yamllint disable rule:line-length
+---
+
+name: composite-lint
+description: Opinionated all-in-one linting, installing only what the detected (or requested) languages need.
+author: Matthew Read
+
+branding:
+  icon: check-circle
+  color: green
+
+# Versions: `<tool>-version` takes a raw version and `<tool>-version-file` a path to a file containing one;
+# set at most one. Configs: `<tool>-config` takes a path. Anything unset uses what's bundled with the action.
+inputs:
+  cache:
+    description: Whether to use the Actions cache for the linters, Go's module/build caches, golangci-lint's analysis cache, and Terraform providers.
+    required: false
+    default: 'true'
+  github-token:
+    description: Token for zizmor's online audits and TFLint plugin downloads.
+    required: false
+    default: ${{ github.token }}
+  exclude:
+    description: Git pathspecs to exclude, whitespace-separated.
+    required: false
+  languages:
+    description: Languages to lint, comma- or whitespace-separated (actions, docker, go, python, shell, terraform, woke, yaml). Detected from the files present if empty.
+    required: false
+  paths:
+    description: Paths to lint, whitespace-separated.
+    required: false
+    default: .
+
+  actionlint-config:
+    description: actionlint config file.
+    required: false
+  actionlint-version:
+    description: actionlint version.
+    required: false
+  actionlint-version-file:
+    description: File containing the actionlint version.
+    required: false
+  flake8-config:
+    description: flake8 config file.
+    required: false
+  flake8-version:
+    description: flake8 version.
+    required: false
+  flake8-version-file:
+    description: File containing the flake8 version.
+    required: false
+  go-version:
+    description: Go version.
+    required: false
+  go-version-file:
+    description: File containing the Go version, e.g. go.mod (the default).
+    required: false
+  golangci-lint-config:
+    description: golangci-lint config file.
+    required: false
+  golangci-lint-version:
+    description: golangci-lint version.
+    required: false
+  golangci-lint-version-file:
+    description: File containing the golangci-lint version.
+    required: false
+  hadolint-config:
+    description: hadolint config file.
+    required: false
+  hadolint-version:
+    description: hadolint version.
+    required: false
+  hadolint-version-file:
+    description: File containing the hadolint version.
+    required: false
+  python-version:
+    description: Python version used to run the Python-based linters.
+    required: false
+  python-version-file:
+    description: File containing the Python version.
+    required: false
+  shellcheck-config:
+    description: ShellCheck rcfile.
+    required: false
+  shellcheck-version:
+    description: ShellCheck version.
+    required: false
+  shellcheck-version-file:
+    description: File containing the ShellCheck version.
+    required: false
+  terraform-version:
+    description: Terraform version.
+    required: false
+  terraform-version-file:
+    description: File containing the Terraform version.
+    required: false
+  tflint-config:
+    description: TFLint config file.
+    required: false
+  tflint-version:
+    description: TFLint version.
+    required: false
+  tflint-version-file:
+    description: File containing the TFLint version.
+    required: false
+  woke-config:
+    description: woke config file.
+    required: false
+  woke-version:
+    description: woke version.
+    required: false
+  woke-version-file:
+    description: File containing the woke version.
+    required: false
+  yamllint-config:
+    description: yamllint config file.
+    required: false
+  yamllint-version:
+    description: yamllint version.
+    required: false
+  yamllint-version-file:
+    description: File containing the yamllint version.
+    required: false
+  zizmor-config:
+    description: zizmor config file.
+    required: false
+  zizmor-version:
+    description: zizmor version.
+    required: false
+  zizmor-version-file:
+    description: File containing the zizmor version.
+    required: false
+
+outputs:
+  languages:
+    description: JSON array of the languages that were linted.
+    value: ${{ steps.detect.outputs.languages }}
+
+runs:
+  using: composite
+  steps:
+    - name: Detect languages
+      id: detect
+      env:
+        LINT_EXCLUDE: ${{ inputs.exclude }}
+        LINT_LANGUAGES: ${{ inputs.languages }}
+        LINT_PATHS: ${{ inputs.paths }}
+      shell: bash
+      run: |
+        echo "languages=$("${GITHUB_ACTION_PATH}/bin/lint.sh" detect)" >>"${GITHUB_OUTPUT}"
+        # rolls the golangci-lint cache over weekly so it doesn't go stale
+        echo "week=$(date -u +%G-%V)" >>"${GITHUB_OUTPUT}"
+
+    # The setup steps can fail without stopping the action; bin/lint.sh then fails only the languages that need
+    # them and still runs the rest. setup-python falls back to the runner's own python3.
+    - name: Set up Python
+      id: python
+      if: contains(fromJSON(steps.detect.outputs.languages), 'actions') || contains(fromJSON(steps.detect.outputs.languages), 'python') || contains(fromJSON(steps.detect.outputs.languages), 'yaml')
+      uses: actions/setup-python@v7
+      continue-on-error: true
+      with:
+        python-version: ${{ inputs.python-version }}
+        python-version-file: ${{ inputs.python-version-file || (inputs.python-version == '' && format('{0}/versions/.python-version', github.action_path)) || '' }}
+        # the linters get their own venvs; don't change the Python seen by the rest of the job
+        update-environment: false
+
+    - name: Set up Go
+      if: contains(fromJSON(steps.detect.outputs.languages), 'go')
+      uses: actions/setup-go@v7
+      continue-on-error: true
+      with:
+        cache: ${{ inputs.cache }}
+        cache-dependency-path: '**/go.sum'
+        go-version: ${{ inputs.go-version }}
+        go-version-file: ${{ inputs.go-version-file || (inputs.go-version == '' && 'go.mod') || '' }}
+
+    # setup-terraform has no input for reading a version file
+    - name: Resolve Terraform version
+      id: terraform
+      if: contains(fromJSON(steps.detect.outputs.languages), 'terraform')
+      env:
+        LINT_TERRAFORM_VERSION: ${{ inputs.terraform-version }}
+        LINT_TERRAFORM_VERSION_FILE: ${{ inputs.terraform-version-file }}
+      shell: bash
+      run: echo "version=$("${GITHUB_ACTION_PATH}/bin/lint.sh" version terraform)" >>"${GITHUB_OUTPUT}"
+
+    - name: Set up Terraform
+      if: contains(fromJSON(steps.detect.outputs.languages), 'terraform')
+      uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e  # v4.0.1
+      continue-on-error: true
+      with:
+        terraform_version: ${{ steps.terraform.outputs.version }}
+        # The stdout wrapper would interfere with reading Terraform's output
+        terraform_wrapper: false
+
+    # The exact key depends on the resolved tool versions, which are only known once the Lint step runs, so restore
+    # the latest entry by prefix and save under the exact key afterwards. Self-hosted runners keep the tool cache
+    # between jobs anyway.
+    - name: Restore linters
+      id: tools-cache
+      if: inputs.cache == 'true' && runner.environment == 'github-hosted'
+      uses: actions/cache/restore@v6
+      with:
+        # venvs only work with the exact Python they were made from
+        key: composite-lint-tools-${{ runner.os }}-${{ runner.arch }}-py${{ steps.python.outputs.python-version }}-
+        path: |
+          ${{ runner.tool_cache }}/composite-lint/tools
+          ${{ runner.tool_cache }}/composite-lint/venv
+        restore-keys: composite-lint-tools-${{ runner.os }}-${{ runner.arch }}-py${{ steps.python.outputs.python-version }}-
+
+    - name: Cache golangci-lint analysis
+      if: inputs.cache == 'true' && contains(fromJSON(steps.detect.outputs.languages), 'go')
+      uses: actions/cache@v6
+      with:
+        key: composite-lint-golangci-${{ runner.os }}-${{ runner.arch }}-${{ steps.detect.outputs.week }}-${{ hashFiles('**/go.sum') }}
+        path: ${{ runner.temp }}/golangci-lint
+        restore-keys: composite-lint-golangci-${{ runner.os }}-${{ runner.arch }}-
+
+    - name: Cache Terraform providers
+      if: inputs.cache == 'true' && contains(fromJSON(steps.detect.outputs.languages), 'terraform')
+      uses: actions/cache@v6
+      with:
+        key: composite-lint-terraform-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/.terraform.lock.hcl') }}
+        path: ${{ runner.temp }}/terraform-plugins
+        restore-keys: composite-lint-terraform-${{ runner.os }}-${{ runner.arch }}-
+
+    - name: Lint
+      id: lint
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        GOLANGCI_LINT_CACHE: ${{ runner.temp }}/golangci-lint
+        LINT_ACTIONLINT_CONFIG: ${{ inputs.actionlint-config }}
+        LINT_ACTIONLINT_VERSION: ${{ inputs.actionlint-version }}
+        LINT_ACTIONLINT_VERSION_FILE: ${{ inputs.actionlint-version-file }}
+        LINT_CACHE: ${{ runner.tool_cache }}/composite-lint
+        LINT_EXCLUDE: ${{ inputs.exclude }}
+        LINT_FLAKE8_CONFIG: ${{ inputs.flake8-config }}
+        LINT_FLAKE8_VERSION: ${{ inputs.flake8-version }}
+        LINT_FLAKE8_VERSION_FILE: ${{ inputs.flake8-version-file }}
+        LINT_GOLANGCI_LINT_CONFIG: ${{ inputs.golangci-lint-config }}
+        LINT_GOLANGCI_LINT_VERSION: ${{ inputs.golangci-lint-version }}
+        LINT_GOLANGCI_LINT_VERSION_FILE: ${{ inputs.golangci-lint-version-file }}
+        LINT_HADOLINT_CONFIG: ${{ inputs.hadolint-config }}
+        LINT_HADOLINT_VERSION: ${{ inputs.hadolint-version }}
+        LINT_HADOLINT_VERSION_FILE: ${{ inputs.hadolint-version-file }}
+        LINT_LANGUAGES: ${{ steps.detect.outputs.languages }}
+        LINT_PATHS: ${{ inputs.paths }}
+        # a restored cache would otherwise keep every version it's ever held
+        LINT_PRUNE: ${{ steps.tools-cache.outcome == 'success' }}
+        LINT_PYTHON: ${{ steps.python.outputs.python-path }}
+        LINT_SHELLCHECK_CONFIG: ${{ inputs.shellcheck-config }}
+        LINT_SHELLCHECK_VERSION: ${{ inputs.shellcheck-version }}
+        LINT_SHELLCHECK_VERSION_FILE: ${{ inputs.shellcheck-version-file }}
+        LINT_TFLINT_CONFIG: ${{ inputs.tflint-config }}
+        LINT_TFLINT_VERSION: ${{ inputs.tflint-version }}
+        LINT_TFLINT_VERSION_FILE: ${{ inputs.tflint-version-file }}
+        LINT_WOKE_CONFIG: ${{ inputs.woke-config }}
+        LINT_WOKE_VERSION: ${{ inputs.woke-version }}
+        LINT_WOKE_VERSION_FILE: ${{ inputs.woke-version-file }}
+        LINT_YAMLLINT_CONFIG: ${{ inputs.yamllint-config }}
+        LINT_YAMLLINT_VERSION: ${{ inputs.yamllint-version }}
+        LINT_YAMLLINT_VERSION_FILE: ${{ inputs.yamllint-version-file }}
+        LINT_ZIZMOR_CONFIG: ${{ inputs.zizmor-config }}
+        LINT_ZIZMOR_VERSION: ${{ inputs.zizmor-version }}
+        LINT_ZIZMOR_VERSION_FILE: ${{ inputs.zizmor-version-file }}
+        TF_PLUGIN_CACHE_DIR: ${{ runner.temp }}/terraform-plugins
+      shell: bash
+      # a tool that fails to install only fails the languages that need it, so lint regardless
+      run: |
+        lint="${GITHUB_ACTION_PATH}/bin/lint.sh"
+        echo "tools=$("${lint}" versions | sha256sum | cut -c1-16)" >>"${GITHUB_OUTPUT}"
+        status=0
+        "${lint}" install || status=$?
+        echo "installed=$((status == 0))" >>"${GITHUB_OUTPUT}"
+        "${lint}" run || status=$?
+        exit "${status}"
+
+    # saved even when linting fails, but only if every tool installed and the restored entry wasn't already this one
+    - name: Save linters
+      if: >-
+        always() && steps.tools-cache.outcome == 'success' && steps.lint.outputs.installed == '1' &&
+        steps.tools-cache.outputs.cache-matched-key != format('composite-lint-tools-{0}-{1}-py{2}-{3}', runner.os, runner.arch, steps.python.outputs.python-version, steps.lint.outputs.tools)
+      uses: actions/cache/save@v6
+      with:
+        key: composite-lint-tools-${{ runner.os }}-${{ runner.arch }}-py${{ steps.python.outputs.python-version }}-${{ steps.lint.outputs.tools }}
+        path: |
+          ${{ runner.tool_cache }}/composite-lint/tools
+          ${{ runner.tool_cache }}/composite-lint/venv

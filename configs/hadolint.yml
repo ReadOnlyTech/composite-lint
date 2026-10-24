@@ -1,0 +1,5 @@
+---
+
+ignored:
+  # "COPY --from should use a FROM alias", but it can use a build context
+  - DL3022

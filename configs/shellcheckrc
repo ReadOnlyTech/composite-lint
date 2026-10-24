@@ -1,0 +1,3 @@
+# Follow sourced files, resolving them relative to the script that sources them
+external-sources=true
+source-path=SCRIPTDIR

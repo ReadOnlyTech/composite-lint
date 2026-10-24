@@ -1,0 +1,5 @@
+#!/bin/sh
+
+# Expected to fail SC2086: $1 is unquoted. This file has no extension, so it's only linted if
+# it's detected as shell by its shebang.
+echo $1
