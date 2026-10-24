@@ -44,8 +44,9 @@ else
   echo 'ok: invalid input stops everything up front'
 fi
 
-# go isn't in /usr/bin or /bin, so only the go checks should be skipped
-output=$(PATH=/usr/bin:/bin "${lint}" --languages go,python tests/pass 2>&1)
+# This golangci-lint version is never installed, and the system dirs won't have one to fall back on (unlike, e.g.,
+# Homebrew's), so only the go checks should be skipped. Uses this Bash, since PATH no longer finds a modern one.
+output=$(PATH=/usr/bin:/bin LINT_GOLANGCI_LINT_VERSION=0.0.1 "${BASH}" "${lint}" --languages go,python tests/pass 2>&1)
 status=${?}
 if [[ ${status} -ne 2 || ${output} != *'skipping go'* || ${output} != *'== python =='* ]]; then
   echo "${output}"
