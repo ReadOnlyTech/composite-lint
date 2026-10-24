@@ -156,7 +156,7 @@ runs:
     - name: Set up Python
       id: python
       if: contains(fromJSON(steps.detect.outputs.languages), 'actions') || contains(fromJSON(steps.detect.outputs.languages), 'python') || contains(fromJSON(steps.detect.outputs.languages), 'yaml')
-      uses: actions/setup-python@v7
+      uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
       continue-on-error: true
       with:
         python-version: ${{ inputs.python-version }}
@@ -166,7 +166,7 @@ runs:
 
     - name: Set up Go
       if: contains(fromJSON(steps.detect.outputs.languages), 'go')
-      uses: actions/setup-go@v7
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
       continue-on-error: true
       with:
         cache: ${{ inputs.cache }}
@@ -199,7 +199,7 @@ runs:
     - name: Restore linters
       id: tools-cache
       if: inputs.cache == 'true' && runner.environment == 'github-hosted'
-      uses: actions/cache/restore@v6
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
       with:
         # venvs only work with the exact Python they were made from
         key: composite-lint-tools-${{ runner.os }}-${{ runner.arch }}-py${{ steps.python.outputs.python-version }}-
@@ -210,7 +210,7 @@ runs:
 
     - name: Cache golangci-lint analysis
       if: inputs.cache == 'true' && contains(fromJSON(steps.detect.outputs.languages), 'go')
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
       with:
         key: composite-lint-golangci-${{ runner.os }}-${{ runner.arch }}-${{ steps.detect.outputs.week }}-${{ hashFiles('**/go.sum') }}
         path: ${{ runner.temp }}/golangci-lint
@@ -218,7 +218,7 @@ runs:
 
     - name: Cache Terraform providers
       if: inputs.cache == 'true' && contains(fromJSON(steps.detect.outputs.languages), 'terraform')
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
       with:
         key: composite-lint-terraform-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/.terraform.lock.hcl') }}
         path: ${{ runner.temp }}/terraform-plugins
@@ -281,7 +281,7 @@ runs:
       if: >-
         always() && steps.tools-cache.outcome == 'success' && steps.lint.outputs.installed == '1' &&
         steps.tools-cache.outputs.cache-matched-key != format('composite-lint-tools-{0}-{1}-py{2}-{3}', runner.os, runner.arch, steps.python.outputs.python-version, steps.lint.outputs.tools)
-      uses: actions/cache/save@v6
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
       with:
         key: composite-lint-tools-${{ runner.os }}-${{ runner.arch }}-py${{ steps.python.outputs.python-version }}-${{ steps.lint.outputs.tools }}
         path: |
