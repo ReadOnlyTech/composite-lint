@@ -15,7 +15,7 @@ permissions: {}
 
 jobs:
   validate:
-    name: Lint and test
+    name: Lint and Test
     runs-on: ubuntu-latest
     permissions:
       contents: read

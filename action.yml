@@ -16,13 +16,13 @@ inputs:
     description: Whether to use the Actions cache for the linters, Go's module/build caches, golangci-lint's analysis cache, and Terraform providers.
     required: false
     default: 'true'
+  exclude:
+    description: Git pathspecs to exclude, whitespace-separated.
+    required: false
   github-token:
     description: Token for zizmor's online audits and TFLint plugin downloads.
     required: false
     default: ${{ github.token }}
-  exclude:
-    description: Git pathspecs to exclude, whitespace-separated.
-    required: false
   languages:
     description: Languages to lint, comma- or whitespace-separated (actions, docker, go, python, shell, terraform, woke, yaml). Detected from the files present if empty.
     required: false
