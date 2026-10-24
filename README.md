@@ -2,33 +2,35 @@
 
 All-in-one opinionated selection of linters &amp; config.
 
+(Tested with Linux runners only, both GitHub-hosted and self-hosted.)
+
 ## Usage
 
+See [`action.yml`](action.yml) for all inputs.
+
 ```yaml
-- uses: actions/checkout@v7
+- name: Check out repo
+  uses: actions/checkout@v7
   with:
     persist-credentials: false
 
-- uses: ReadOnlyTech/composite-lint@v0
-  with:
-    # optional; detected from the files present otherwise
-    languages: python, shell, yaml
+- name: Run linting
+  uses: ReadOnlyTech/composite-lint@v0
 ```
 
-Only the tools needed for the selected languages are installed. Every tool's version can be overridden with
-`<tool>-version` or `<tool>-version-file`, and its config with `<tool>-config`; anything unset uses what's bundled in
-[`versions/`](versions) and [`configs/`](configs). See [`action.yml`](action.yml) for all inputs.
-
-Linux runners only, both GitHub-hosted and self-hosted.
+Only the tools needed for the selected `languages` (defaulting to auto-detection) are installed. Every language /
+tool version can be overridden with `<tool>-version` or `<tool>-version-file`, and its config with `<tool>-config`;
+anything unset uses what's bundled in[`versions/`](versions) and [`configs/`](configs).  As a general rule, these
+default versions are "latest stable" and the default configs are "very strict".
 
 The linters, Go's module/build caches, golangci-lint's analysis cache, and Terraform providers are kept in the Actions
-cache, which counts toward the repo's cache quota. Set `cache: false` to turn that off.
+cache, and count toward your repo's cache quota. Set `cache: false` to turn that off.
 
 ## Supported Languages / Ecosystems
 
 ### Docker
 
-Using `hadolint` and `trivy`.
+Using `hadolint`.
 
 ### GitHub Actions
 
@@ -58,11 +60,16 @@ Using `yamllint`.
 
 - `woke`
 
-## Running locally
+## Running Locally
 
 ```sh
-bin/lint.sh install   # installs pinned tools into ~/.cache/composite-lint
-bin/lint.sh           # lints the current repo
+# installs pinned tools into ~/.cache/composite-lint
+bin/lint.sh install
+
+# lints the current dir (`.`)
+bin/lint.sh
+
+$ lints the target language, excluding one dir and targeting another
 bin/lint.sh --languages shell --exclude tests/fail path/to/dir
 ```
 
@@ -71,9 +78,12 @@ Settings come from the same `LINT_*` environment variables the action uses; see 
 ## Development
 
 ```sh
-bin/lint.sh --exclude tests/fail   # lint this repo with itself
-tests/run.sh                       # check tests/pass lints clean and each tests/fail case fails as expected
+# lint this repo with itself
+bin/lint.sh --exclude tests/fail
+
+# check tests/pass lints clean and each tests/fail case fails as expected
+tests/run.sh
 ```
 
-Each `tests/fail/<language>/<case>/` holds the files to lint plus an `expect` file containing a regex that must
+Each `tests/fail/<language>/<case>/` holds the files to lint, plus an `expect` file containing a regex that must
 appear in the output.
