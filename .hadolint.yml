@@ -1,0 +1,11 @@
+---
+# See wiki for codes to ignore: https://github.com/hadolint/hadolint/wiki
+ignored:
+  # The POC "latest" images deliberately build from alpine:latest
+  - DL3007
+  # Images are rebuilt weekly to pick up the latest packages, so don't pin them
+  - DL3013
+  - DL3018
+  - DL3028
+  # COPY --from should use a FROM alias; ours use the `files` build context
+  - DL3022

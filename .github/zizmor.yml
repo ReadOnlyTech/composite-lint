@@ -1,0 +1,10 @@
+---
+
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        actions/*: ref-pin
+        advanced-security/*: ref-pin
+        github/*: ref-pin
+        octokit/*: ref-pin

@@ -1,0 +1,30 @@
+---
+
+version: 2
+
+updates:
+  - package-ecosystem: github-actions
+    commit-message:
+      prefix: 'ci(actions): '
+    cooldown:
+      default-days: 7
+    directory: '/'
+    labels:
+      - ci
+    open-pull-requests-limit: 20
+    schedule:
+      day: sunday
+      interval: weekly
+
+  - package-ecosystem: github-actions
+    commit-message:
+      prefix: 'chore(actions): '
+    cooldown:
+      default-days: 7
+    directory: '/action'
+    labels:
+      - chore
+    open-pull-requests-limit: 20
+    schedule:
+      day: sunday
+      interval: weekly

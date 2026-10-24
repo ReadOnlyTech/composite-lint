@@ -1,0 +1,171 @@
+# yamllint disable rule:line-length
+---
+
+name: Lint
+
+on:  # yamllint disable-line rule:truthy
+  pull_request:
+
+concurrency:
+  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+
+permissions: {}
+
+jobs:
+  go:
+    name: Go Linting
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Check go.mod and go.sum are tidy
+        run: go mod tidy -diff
+
+      - name: Go linting
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a  # v9.3.0
+        with:
+          version-file: .golangci-lint-version
+
+  terraform:
+    name: Terraform Linting
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # setup-terraform has no input for reading a version file
+      - name: Read Terraform version
+        id: version
+        shell: bash
+        run: echo "version=$(cat .terraform-version)" >>"${GITHUB_OUTPUT}"
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e  # v4.0.1
+        with:
+          terraform_version: ${{ steps.version.outputs.version }}
+          # The stdout wrapper would interfere with reading Terraform's output
+          terraform_wrapper: false
+
+      - name: Set up TFLint
+        uses: terraform-linters/setup-tflint@6ffdbaa3be476b3431f7275c26966ef32ff60337  # v6.3.2
+        with:
+          tflint_version_file: .tflint-version
+
+      - name: Terraform Format Check
+        run: terraform fmt -recursive -check -diff
+
+      - name: Terraform Linting
+        run: tflint --recursive
+
+  yaml:
+    name: YAML and Action linting
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read  # for zizmor
+      contents: read
+      security-events: write  # for zizmor
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      # setup-terraform has no input for reading a version file
+      - name: Read Terraform version
+        id: version
+        shell: bash
+        run: echo "version=$(cat .terraform-version)" >>"${GITHUB_OUTPUT}"
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e  # v4.0.1
+        with:
+          terraform_version: ${{ steps.version.outputs.version }}
+          # The stdout wrapper would interfere with reading Terraform's output
+          terraform_wrapper: false
+
+      - name: Set up other dependencies
+        run: ./.github/install-linting-deps.sh
+
+      - name: YAML Linting
+        uses: karancode/yamllint-github-action@4052d365f09b8d34eb552c363d1141fd60e2aeb2  # v3.0.0
+        with:
+          yamllint_strict: true
+
+      # actionlint passes scripts to shellcheck via stdin, so .shellcheckrc isn't picked up on its own
+      - name: Load ShellCheck options
+        run: echo "SHELLCHECK_OPTS=$(sed 's/disable=/-e /' < .shellcheckrc)" >>"${GITHUB_ENV}"
+
+      - name: Action linting
+        uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7  # v2.2.0
+        env:
+          SHELLCHECK_OPTS: ${{ env.SHELLCHECK_OPTS }}
+
+      - name: Read zizmor version
+        id: zizmor-version
+        run: echo "version=$(cat .zizmor-version)" >>"${GITHUB_OUTPUT}"
+
+      - name: Run zizmor action checks
+        uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482  # v0.6.4
+        with:
+          persona: auditor
+          token: ${{ github.token }}
+          version: ${{ steps.zizmor-version.outputs.version }}
+
+  other:
+    name: Other Linting
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # this should run before node_modules is created!
+      - name: Run woke
+        uses: get-woke/woke-action@b2ec032c4a2c912142b38a6a453ad62017813ed0  # v0
+        with:
+          fail-on-error: true
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      - name: Set up other dependencies
+        run: ./.github/install-linting-deps.sh
+
+      - name: Python linting
+        run: python3 -m flake8 .
+
+      - name: Shell script linting
+        run: |
+          # shellcheck disable=SC2046
+          shellcheck -ax $(find . -name '*.sh')
+
+      # hadolint-action's recursive mode can't match the POC images' Dockerfile-* names, so run hadolint directly
+      - name: Dockerfile linting
+        run: |
+          docker run --rm -v "${PWD}:/repo" -w /repo "hadolint/hadolint:$(cat .hadolint-version)" \
+            hadolint $(find . -name '*Dockerfile*')
