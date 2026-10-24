@@ -1,14 +1,15 @@
 # yamllint disable rule:line-length
 ---
 
-name: Lint
+name: Lint and Test
 
 on:  # yamllint disable-line rule:truthy
   pull_request:
+  workflow_dispatch:
 
 concurrency:
   cancel-in-progress: true
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
 
 permissions: {}
 

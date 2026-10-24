@@ -26,35 +26,35 @@ set -eo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 LANGUAGES='actions docker go python shell terraform woke yaml'
 PIP_TOOLS=' flake8 yamllint zizmor '
-CACHE=${LINT_CACHE:-${RUNNER_TOOL_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}}/composite-lint}
+CACHE=${LINT_CACHE:-${RUNNER_TOOL_CACHE:-${XDG_CACHE_HOME:-${HOME}/.cache}}/composite-lint}
 
 die() {
-  echo "lint: $*" >&2
+  echo "lint: ${*}" >&2
   exit 2
 }
 
 warn() {
   if [[ -n ${GITHUB_ACTIONS:-} ]]; then
-    echo "::warning::$*"
+    echo "::warning::${*}"
   else
-    echo "lint: warning: $*" >&2
+    echo "lint: warning: ${*}" >&2
   fi
 }
 
 # Like die, but leaves it to the caller to carry on
 error() {
   if [[ -n ${GITHUB_ACTIONS:-} ]]; then
-    echo "::error::$*"
+    echo "::error::${*}"
   else
-    echo "lint: error: $*" >&2
+    echo "lint: error: ${*}" >&2
   fi
 }
 
 group() {
   if [[ -n ${GITHUB_ACTIONS:-} ]]; then
-    echo "::group::$*"
+    echo "::group::${*}"
   else
-    echo "== $* =="
+    echo "== ${*} =="
   fi
 }
 
@@ -64,64 +64,64 @@ endgroup() {
   fi
 }
 
-# Splits on whitespace and commas without globbing, e.g. `split ARR "$value"`
+# Splits on whitespace and commas without globbing, e.g. `split ARR "${value}"`
 split() {
-  IFS=$' \t\n,' read -r -d '' -a "$1" <<<"$2" || true
+  IFS=$' \t\n,' read -r -d '' -a "${1}" <<<"${2}" || true
 }
 
 trim() {
-  local s=$1
+  local s=${1}
   s=${s#"${s%%[![:space:]]*}"}
   echo "${s%"${s##*[![:space:]]}"}"
 }
 
 abspath() {
-  echo "$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
+  echo "$(cd "$(dirname "${1}")" && pwd)/$(basename "${1}")"
 }
 
 # --- versions and configs ---
 
 env_key() {
-  echo "LINT_$(echo "$1" | tr '[:lower:]-' '[:upper:]_')"
+  echo "LINT_$(echo "${1}" | tr '[:lower:]-' '[:upper:]_')"
 }
 
 # First non-blank, non-comment line
 read_version_file() {
   local line
-  while IFS= read -r line || [[ -n $line ]]; do
+  while IFS= read -r line || [[ -n ${line} ]]; do
     line=$(trim "${line%%#*}")
-    if [[ -n $line ]]; then
-      echo "$line"
+    if [[ -n ${line} ]]; then
+      echo "${line}"
       return
     fi
-  done <"$1"
+  done <"${1}"
 }
 
 version() {
   local key raw file v
-  key=$(env_key "$1")
+  key=$(env_key "${1}")
   raw=${key}_VERSION
   raw=${!raw:-}
   file=${key}_VERSION_FILE
   file=${!file:-}
 
-  if [[ -n $raw && -n $file ]]; then
+  if [[ -n ${raw} && -n ${file} ]]; then
     die "set only one of ${key}_VERSION and ${key}_VERSION_FILE"
-  elif [[ -n $raw ]]; then
-    v=$raw
-  elif [[ -n $file ]]; then
-    [[ -f $file ]] || die "${key}_VERSION_FILE: $file not found"
-    v=$(read_version_file "$file")
-  elif [[ -f $ROOT/versions/.$1-version ]]; then
-    v=$(read_version_file "$ROOT/versions/.$1-version")
+  elif [[ -n ${raw} ]]; then
+    v=${raw}
+  elif [[ -n ${file} ]]; then
+    [[ -f ${file} ]] || die "${key}_VERSION_FILE: ${file} not found"
+    v=$(read_version_file "${file}")
+  elif [[ -f ${ROOT}/versions/.${1}-version ]]; then
+    v=$(read_version_file "${ROOT}/versions/.${1}-version")
   else
-    v=$(sed -n "s/^$1==//p" "$ROOT/versions/requirements.txt")
+    v=$(sed -n "s/^${1}==//p" "${ROOT}/versions/pip/requirements.txt")
   fi
 
-  [[ -n $v ]] || die "no version found for $1"
+  [[ -n ${v} ]] || die "no version found for ${1}"
 
   # Inputs may come with or without a `v`. Release downloads are tagged with one; pip and Terraform aren't.
-  if is_pip "$1" || [[ $1 == terraform ]]; then
+  if is_pip "${1}" || [[ ${1} == terraform ]]; then
     echo "${v#v}"
   else
     echo "v${v#v}"
@@ -129,7 +129,7 @@ version() {
 }
 
 bundled_config() {
-  case $1 in
+  case ${1} in
     actionlint) echo actionlint.yml ;;
     flake8) echo flake8.ini ;;
     hadolint) echo hadolint.yml ;;
@@ -143,22 +143,22 @@ bundled_config() {
 # Absolute path to the config to use, or nothing if there's neither an input nor a bundled one
 config() {
   local var path bundled
-  var=$(env_key "$1")_CONFIG
+  var=$(env_key "${1}")_CONFIG
   path=${!var:-}
-  bundled=$(bundled_config "$1")
+  bundled=$(bundled_config "${1}")
 
-  if [[ -n $path ]]; then
-    [[ -f $path ]] || die "$var: $path not found"
-    abspath "$path"
-  elif [[ -n $bundled ]]; then
-    echo "$ROOT/configs/$bundled"
+  if [[ -n ${path} ]]; then
+    [[ -f ${path} ]] || die "${var}: ${path} not found"
+    abspath "${path}"
+  elif [[ -n ${bundled} ]]; then
+    echo "${ROOT}/configs/${bundled}"
   fi
 }
 
 # --- tool installation ---
 
 tools_for() {
-  case $1 in
+  case ${1} in
     actions) echo actionlint shellcheck zizmor ;;
     docker) echo hadolint ;;
     go) echo golangci-lint ;;
@@ -171,16 +171,16 @@ tools_for() {
 }
 
 is_pip() {
-  [[ $PIP_TOOLS == *" $1 "* ]]
+  [[ ${PIP_TOOLS} == *" ${1} "* ]]
 }
 
 tool_dir() {
   local v
-  v=$(version "$1")
-  if is_pip "$1"; then
-    echo "$CACHE/venv/$1-$v/bin"
+  v=$(version "${1}")
+  if is_pip "${1}"; then
+    echo "${CACHE}/venv/${1}-${v}/bin"
   else
-    echo "$CACHE/tools/$1/$v"
+    echo "${CACHE}/tools/${1}/${v}"
   fi
 }
 
@@ -195,27 +195,27 @@ platform() {
 
 # Takes the release tag; some asset names use the version without its `v`
 binary_url() {
-  local tag=$2 v=${2#v} gh=https://github.com
-  case $1 in
+  local tag=${2} v=${2#v} gh=https://github.com
+  case ${1} in
     actionlint)
-      echo "$gh/rhysd/actionlint/releases/download/$tag/actionlint_${v}_${OS}_$ARCH.tar.gz" ;;
+      echo "${gh}/rhysd/actionlint/releases/download/${tag}/actionlint_${v}_${OS}_${ARCH}.tar.gz" ;;
     golangci-lint)
-      echo "$gh/golangci/golangci-lint/releases/download/$tag/golangci-lint-$v-$OS-$ARCH.tar.gz" ;;
+      echo "${gh}/golangci/golangci-lint/releases/download/${tag}/golangci-lint-${v}-${OS}-${ARCH}.tar.gz" ;;
     hadolint)
-      local os=$OS arch=x86_64
-      [[ $OS == darwin ]] && os=macos
-      [[ $ARCH == arm64 ]] && arch=arm64
-      echo "$gh/hadolint/hadolint/releases/download/$tag/hadolint-$os-$arch" ;;
+      local os=${OS} arch=x86_64
+      [[ ${OS} == darwin ]] && os=macos
+      [[ ${ARCH} == arm64 ]] && arch=arm64
+      echo "${gh}/hadolint/hadolint/releases/download/${tag}/hadolint-${os}-${arch}" ;;
     shellcheck)
       local arch=x86_64
-      [[ $ARCH == arm64 ]] && arch=aarch64
-      echo "$gh/koalaman/shellcheck/releases/download/$tag/shellcheck-$tag.$OS.$arch.tar.gz" ;;
+      [[ ${ARCH} == arm64 ]] && arch=aarch64
+      echo "${gh}/koalaman/shellcheck/releases/download/${tag}/shellcheck-${tag}.${OS}.${arch}.tar.gz" ;;
     tflint)
-      echo "$gh/terraform-linters/tflint/releases/download/$tag/tflint_${OS}_$ARCH.zip" ;;
+      echo "${gh}/terraform-linters/tflint/releases/download/${tag}/tflint_${OS}_${ARCH}.zip" ;;
     woke)
-      echo "$gh/get-woke/woke/releases/download/$tag/woke-$v-$OS-$ARCH.tar.gz" ;;
+      echo "${gh}/get-woke/woke/releases/download/${tag}/woke-${v}-${OS}-${ARCH}.tar.gz" ;;
     *)
-      die "don't know how to install $1" ;;
+      die "don't know how to install ${1}" ;;
   esac
 }
 
@@ -224,43 +224,43 @@ binary_url() {
 # ponytail: no checksum verification; a checksum fetched from the same release only catches corruption.
 # Pin hashes per version in versions/ if supply-chain verification is needed.
 install_binary() {
-  local dest=$CACHE/tools/$1/$2 url tmp
-  [[ -x $dest/$1 ]] && return
-  url=$(binary_url "$1" "$2")
-  echo "Installing $1 $2 from $url"
+  local dest=${CACHE}/tools/${1}/${2} url tmp
+  [[ -x ${dest}/${1} ]] && return
+  url=$(binary_url "${1}" "${2}")
+  echo "Installing ${1} ${2} from ${url}"
 
   tmp=$(mktemp -d) || return 1
-  if ! curl -fsSL "$url" -o "$tmp/download"; then
-    rm -rf "$tmp"
+  if ! curl -fsSL "${url}" -o "${tmp}/download"; then
+    rm -rf "${tmp}"
     return 1
   fi
-  case $url in
-    *.tar.gz) tar -xzf "$tmp/download" -C "$tmp" ;;
-    *.zip) unzip -q "$tmp/download" -d "$tmp" ;;
-    *) mv "$tmp/download" "$tmp/$1" ;;
+  case ${url} in
+    *.tar.gz) tar -xzf "${tmp}/download" -C "${tmp}" ;;
+    *.zip) unzip -q "${tmp}/download" -d "${tmp}" ;;
+    *) mv "${tmp}/download" "${tmp}/${1}" ;;
   esac &&
-    mkdir -p "$dest" &&
-    find "$tmp" -type f -name "$1" -exec mv {} "$dest/$1" \;
-  rm -rf "$tmp"
-  [[ -f $dest/$1 ]] && chmod +x "$dest/$1"
+    mkdir -p "${dest}" &&
+    find "${tmp}" -type f -name "${1}" -exec mv {} "${dest}/${1}" \;
+  rm -rf "${tmp}"
+  [[ -f ${dest}/${1} ]] && chmod +x "${dest}/${1}"
 }
 
 install_pip() {
-  local venv=$CACHE/venv/$1-$2
+  local venv=${CACHE}/venv/${1}-${2}
   # a venv breaks if the Python it was made from has gone, e.g. after an upgrade
-  if [[ -x $venv/bin/$1 ]] && "$venv/bin/python" -c '' 2>/dev/null; then
+  if [[ -x ${venv}/bin/${1} ]] && "${venv}/bin/python" -c '' 2>/dev/null; then
     return
   fi
-  echo "Installing $1 $2 with pip"
+  echo "Installing ${1} ${2} with pip"
 
-  rm -rf "$venv"
-  if ! "${LINT_PYTHON:-python3}" -m venv "$venv"; then
+  rm -rf "${venv}"
+  if ! "${LINT_PYTHON:-python3}" -m venv "${venv}"; then
     error "couldn't create a venv; install your distro's venv package (e.g. python3-venv) or set LINT_PYTHON"
-    rm -rf "$venv"
+    rm -rf "${venv}"
     return 1
   fi
-  if ! "$venv/bin/python" -m pip install -q --disable-pip-version-check "$1==$2"; then
-    rm -rf "$venv"
+  if ! "${venv}/bin/python" -m pip install -q --disable-pip-version-check "${1}==${2}"; then
+    rm -rf "${venv}"
     return 1
   fi
 }
@@ -269,20 +269,20 @@ install_pip() {
 selected_tools() {
   local lang tool seen=' '
   for lang in "${SELECTED[@]}"; do
-    for tool in $(tools_for "$lang"); do
-      if [[ $seen != *" $tool "* ]]; then
-        seen+="$tool "
-        echo "$tool"
+    for tool in $(tools_for "${lang}"); do
+      if [[ ${seen} != *" ${tool} "* ]]; then
+        seen+="${tool} "
+        echo "${tool}"
       fi
     done
   done
 }
 
 install_path() {
-  if is_pip "$1"; then
-    echo "$CACHE/venv/$1-$2"
+  if is_pip "${1}"; then
+    echo "${CACHE}/venv/${1}-${2}"
   else
-    echo "$CACHE/tools/$1/$2"
+    echo "${CACHE}/tools/${1}/${2}"
   fi
 }
 
@@ -292,39 +292,39 @@ install_tools() {
   local tool v path keep=' ' status=0
   platform
   for tool in $(selected_tools); do
-    v=$(version "$tool")
-    keep+="$(install_path "$tool" "$v") "
-    if is_pip "$tool"; then
-      install_pip "$tool" "$v"
+    v=$(version "${tool}")
+    keep+="$(install_path "${tool}" "${v}") "
+    if is_pip "${tool}"; then
+      install_pip "${tool}" "${v}"
     else
-      install_binary "$tool" "$v"
+      install_binary "${tool}" "${v}"
     fi || {
-      error "failed to install $tool $v"
+      error "failed to install ${tool} ${v}"
       status=2
     }
   done
 
   if [[ ${LINT_PRUNE:-} == true ]]; then
-    for path in "$CACHE"/tools/*/* "$CACHE"/venv/*; do
-      if [[ -e $path && $keep != *" $path "* ]]; then
-        echo "Pruning $path"
-        rm -rf "$path"
+    for path in "${CACHE}"/tools/*/* "${CACHE}"/venv/*; do
+      if [[ -e ${path} && ${keep} != *" ${path} "* ]]; then
+        echo "Pruning ${path}"
+        rm -rf "${path}"
       fi
     done
   fi
-  return $status
+  return ${status}
 }
 
 runtimes_for() {
-  case $1 in
+  case ${1} in
     go) echo go ;;
     terraform) echo terraform ;;
   esac
 }
 
 need() {
-  command -v "$1" >/dev/null && return
-  error "$1 not found; run 'bin/lint.sh install' or put it on the PATH"
+  command -v "${1}" >/dev/null && return
+  error "${1} not found; run 'bin/lint.sh install' or put it on the PATH"
   return 1
 }
 
@@ -332,32 +332,32 @@ need() {
 # already there. Fails if anything the language needs is missing.
 setup_language() {
   local tool dir status=0
-  for tool in $(tools_for "$1"); do
-    dir=$(tool_dir "$tool")
-    if [[ -d $dir ]]; then
-      PATH=$dir:$PATH
+  for tool in $(tools_for "${1}"); do
+    dir=$(tool_dir "${tool}")
+    if [[ -d ${dir} ]]; then
+      PATH=${dir}:${PATH}
     fi
-    need "$tool" || status=1
+    need "${tool}" || status=1
   done
-  for tool in $(runtimes_for "$1"); do
-    need "$tool" || status=1
+  for tool in $(runtimes_for "${1}"); do
+    need "${tool}" || status=1
   done
-  return $status
+  return ${status}
 }
 
 # Dies on any invalid version or config input for the selected languages, before anything else happens
 validate_inputs() {
   local tool
   for tool in $(selected_tools); do
-    version "$tool" >/dev/null
-    config "$tool" >/dev/null
+    version "${tool}" >/dev/null
+    config "${tool}" >/dev/null
   done
 }
 
 print_versions() {
   local tool
   for tool in $(selected_tools); do
-    echo "$tool $(version "$tool")"
+    echo "${tool} $(version "${tool}")"
   done
 }
 
@@ -366,40 +366,41 @@ print_versions() {
 collect_files() {
   local spec=("${PATHS[@]}") p f list
   for p in "${EXCLUDES[@]}"; do
-    spec+=(":(exclude)$p")
+    spec+=(":(exclude)${p}")
   done
 
   git rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "not inside a git repository"
   list=$(git ls-files -co --exclude-standard -- "${spec[@]}") || die "couldn't list files"
   FILES=()
   while IFS= read -r f; do
-    if [[ -f $f ]]; then
-      FILES+=("$f")
+    if [[ -f ${f} ]]; then
+      FILES+=("${f}")
     fi
-  done <<<"$list"
+  done <<<"${list}"
 }
 
 is_shell_script() {
   local line
-  IFS= read -r line <"$1" || true
-  [[ $line =~ ^#!.*[/[:space:]](ba|da|k)?sh([[:space:]]|$) ]]
+  IFS= read -r line <"${1}" || true
+  [[ ${line} =~ ^#!.*[/[:space:]](ba|da|k)?sh([[:space:]]|$) ]]
 }
 
 matches() {
   local base=${2##*/}
-  case $1 in
+  case ${1} in
     actions)
-      case $2 in
+      case ${2} in
         .github/workflows/*.yml | .github/workflows/*.yaml | */.github/workflows/*.yml | */.github/workflows/*.yaml) return 0 ;;
+        .github/dependabot.yml | .github/dependabot.yaml | */.github/dependabot.yml | */.github/dependabot.yaml) return 0 ;;
       esac
-      [[ $base == action.yml || $base == action.yaml ]] ;;
-    docker) [[ $base == *Dockerfile* || $base == *.dockerfile || $base == Containerfile* ]] ;;
-    go) [[ $base == go.mod ]] ;;
-    python) [[ $base == *.py ]] ;;
-    shell) [[ $base == *.sh || $base == *.bash ]] || { [[ $base != *.* ]] && is_shell_script "$2"; } ;;
-    terraform) [[ $base == *.tf ]] ;;
+      [[ ${base} == action.yml || ${base} == action.yaml ]] ;;
+    docker) [[ ${base} == *Dockerfile* || ${base} == *.dockerfile || ${base} == Containerfile* ]] ;;
+    go) [[ ${base} == go.mod ]] ;;
+    python) [[ ${base} == *.py ]] ;;
+    shell) [[ ${base} == *.sh || ${base} == *.bash ]] || { [[ ${base} != *.* ]] && is_shell_script "${2}"; } ;;
+    terraform) [[ ${base} == *.tf ]] ;;
     woke) true ;;
-    yaml) [[ $base == *.yml || $base == *.yaml ]] ;;
+    yaml) [[ ${base} == *.yml || ${base} == *.yaml ]] ;;
   esac
 }
 
@@ -407,8 +408,8 @@ files_for() {
   local f
   LANG_FILES=()
   for f in "${FILES[@]}"; do
-    if matches "$1" "$f"; then
-      LANG_FILES+=("$f")
+    if matches "${1}" "${f}"; then
+      LANG_FILES+=("${f}")
     fi
   done
 }
@@ -418,14 +419,14 @@ select_languages() {
   SELECTED=()
   if ((${#LANGS[@]})); then
     for lang in "${LANGS[@]}"; do
-      [[ " $LANGUAGES " == *" $lang "* ]] || die "unknown language '$lang' (supported: $LANGUAGES)"
-      SELECTED+=("$lang")
+      [[ " ${LANGUAGES} " == *" ${lang} "* ]] || die "unknown language '${lang}' (supported: ${LANGUAGES})"
+      SELECTED+=("${lang}")
     done
   else
-    for lang in $LANGUAGES; do
-      files_for "$lang"
+    for lang in ${LANGUAGES}; do
+      files_for "${lang}"
       if ((${#LANG_FILES[@]})); then
-        SELECTED+=("$lang")
+        SELECTED+=("${lang}")
       fi
     done
   fi
@@ -434,8 +435,8 @@ select_languages() {
 print_json() {
   local sep='' item
   printf '['
-  for item in "$@"; do
-    printf '%s"%s"' "$sep" "$item"
+  for item in "${@}"; do
+    printf '%s"%s"' "${sep}" "${item}"
     sep=,
   done
   printf ']\n'
@@ -443,16 +444,19 @@ print_json() {
 
 # --- linters ---
 # Each runs every check for its language against LANG_FILES and returns 1 if any failed.
+# zizmor and woke respect .gitignore, so without excludes (which they wouldn't know about) they're given the paths and
+# find files themselves. The rest always get LANG_FILES: yamllint and flake8 would lint gitignored dirs like .venv,
+# and neither hadolint nor shellcheck searches directories.
 
 each() {
-  printf '%s\0' "${LANG_FILES[@]}" | xargs -0 "$@"
+  printf '%s\0' "${LANG_FILES[@]}" | xargs -0 "${@}"
 }
 
 # For tools with no option to stay silent when they succeed: only shows their output if they fail
 quiet() {
   local output
-  if ! output=$("$@" 2>&1); then
-    echo "$output"
+  if ! output=$("${@}" 2>&1); then
+    echo "${output}"
     return 1
   fi
 }
@@ -460,9 +464,8 @@ quiet() {
 lint_actions() {
   local rc=0 f cfg workflows=() zizmor_opts=(-q --persona auditor -c "$(config zizmor)")
   for f in "${LANG_FILES[@]}"; do
-    case ${f##*/} in
-      action.yml | action.yaml) ;;
-      *) workflows+=("$f") ;;
+    case ${f} in
+      .github/workflows/* | */.github/workflows/*) workflows+=("${f}") ;;
     esac
   done
 
@@ -470,7 +473,7 @@ lint_actions() {
     cfg=$(config actionlint)
     # actionlint passes scripts to shellcheck via stdin, so the rcfile's disables have to be passed as options
     SHELLCHECK_OPTS=$(sed -n 's/^[[:space:]]*disable=/-e /p' "$(config shellcheck)" | tr '\n' ' ') \
-      actionlint ${cfg:+-config-file "$cfg"} "${workflows[@]}" || rc=1
+      actionlint ${cfg:+-config-file "${cfg}"} "${workflows[@]}" || rc=1
   fi
 
   if [[ -z ${GH_TOKEN:-} ]] && type -p gh >/dev/null; then
@@ -483,8 +486,12 @@ lint_actions() {
   if [[ -n ${GITHUB_ACTIONS:-} ]]; then
     zizmor_opts+=(--format github)
   fi
-  quiet zizmor "${zizmor_opts[@]}" "${LANG_FILES[@]}" || rc=1
-  return $rc
+  if ((${#EXCLUDES[@]})); then
+    quiet zizmor "${zizmor_opts[@]}" "${LANG_FILES[@]}" || rc=1
+  else
+    quiet zizmor "${zizmor_opts[@]}" "${PATHS[@]}" || rc=1
+  fi
+  return ${rc}
 }
 
 lint_docker() {
@@ -494,21 +501,21 @@ lint_docker() {
 lint_go() {
   local rc=0 mod opts=(--no-config) cfg
   cfg=$(config golangci-lint)
-  if [[ -n $cfg ]]; then
-    opts=(-c "$cfg")
+  if [[ -n ${cfg} ]]; then
+    opts=(-c "${cfg}")
   fi
 
   for mod in "${LANG_FILES[@]}"; do
     (
-      cd "$(dirname "$mod")"
+      cd "$(dirname "${mod}")"
       go mod tidy -diff
     ) || rc=1
     (
-      cd "$(dirname "$mod")"
+      cd "$(dirname "${mod}")"
       golangci-lint run --show-stats=false "${opts[@]}" ./...
     ) || rc=1
   done
-  return $rc
+  return ${rc}
 }
 
 lint_python() {
@@ -521,53 +528,57 @@ lint_shell() {
 
 # Inits without a backend, keeping .terraform out of the checkout and leaving any lock file as it was found
 terraform_validate() {
-  local dir=$1 lock=$1/.terraform.lock.hcl rc=0 output lockfile_opts=()
-  if [[ -f $lock ]]; then
+  local dir=${1} lock=${1}/.terraform.lock.hcl rc=0 output lockfile_opts=()
+  if [[ -f ${lock} ]]; then
     lockfile_opts=(-lockfile=readonly)
   fi
 
-  if ! output=$(TF_DATA_DIR=$(mktemp -d "$TF_DATA_ROOT/XXXXXX") &&
+  if ! output=$(TF_DATA_DIR=$(mktemp -d "${TF_DATA_ROOT}/XXXXXX") &&
     export TF_DATA_DIR &&
-    terraform -chdir="$dir" init -backend=false -input=false "${lockfile_opts[@]}" 2>&1 &&
-    terraform -chdir="$dir" validate 2>&1); then
-    echo "$output"
+    terraform -chdir="${dir}" init -backend=false -input=false "${lockfile_opts[@]}" 2>&1 &&
+    terraform -chdir="${dir}" validate 2>&1); then
+    echo "${output}"
     rc=1
   fi
 
   if ! ((${#lockfile_opts[@]})); then
-    rm -f "$lock"
+    rm -f "${lock}"
   fi
-  return $rc
+  return ${rc}
 }
 
 lint_terraform() {
   local rc=0 dir f cfg
   cfg=$(config tflint)
   TF_DATA_ROOT=$(mktemp -d)
-  export TF_PLUGIN_CACHE_DIR=${TF_PLUGIN_CACHE_DIR:-$CACHE/terraform-plugins}
-  mkdir -p "$TF_PLUGIN_CACHE_DIR"
+  export TF_PLUGIN_CACHE_DIR=${TF_PLUGIN_CACHE_DIR:-${CACHE}/terraform-plugins}
+  mkdir -p "${TF_PLUGIN_CACHE_DIR}"
 
-  quiet tflint --init -c "$cfg" || rc=1
+  quiet tflint --init -c "${cfg}" || rc=1
   while IFS= read -r dir; do
-    terraform fmt -check -diff "$dir" || rc=1
-    terraform_validate "$dir" || rc=1
-    tflint --chdir="$dir" -c "$cfg" || rc=1
-  done < <(for f in "${LANG_FILES[@]}"; do dirname "$f"; done | sort -u)
+    terraform fmt -check -diff "${dir}" || rc=1
+    terraform_validate "${dir}" || rc=1
+    tflint --chdir="${dir}" -c "${cfg}" || rc=1
+  done < <(for f in "${LANG_FILES[@]}"; do dirname "${f}"; done | sort -u)
 
-  rm -rf "$TF_DATA_ROOT"
-  return $rc
+  rm -rf "${TF_DATA_ROOT}"
+  return ${rc}
 }
 
 lint_woke() {
   local cfg opts=(--exit-1-on-failure)
   cfg=$(config woke)
-  if [[ -n $cfg ]]; then
-    opts+=(-c "$cfg")
+  if [[ -n ${cfg} ]]; then
+    opts+=(-c "${cfg}")
   fi
   if [[ -n ${GITHUB_ACTIONS:-} ]]; then
     opts+=(-o github-actions)
   fi
-  quiet each woke "${opts[@]}"
+  if ((${#EXCLUDES[@]})); then
+    quiet each woke "${opts[@]}"
+  else
+    quiet woke "${opts[@]}" "${PATHS[@]}"
+  fi
 }
 
 lint_yaml() {
@@ -578,22 +589,22 @@ lint_yaml() {
 run_linters() {
   local lang status=0
   for lang in "${SELECTED[@]}"; do
-    files_for "$lang"
+    files_for "${lang}"
     if ! ((${#LANG_FILES[@]})); then
-      warn "no $lang files found"
+      warn "no ${lang} files found"
       continue
     fi
 
-    group "$lang"
-    if ! setup_language "$lang"; then
-      error "skipping $lang checks; it couldn't be set up"
+    group "${lang}"
+    if ! setup_language "${lang}"; then
+      error "skipping ${lang} checks; it couldn't be set up"
       status=2
-    elif ! "lint_$lang"; then
+    elif ! "lint_${lang}"; then
       ((status)) || status=1
     fi
     endgroup
   done
-  return $status
+  return ${status}
 }
 
 # --- main ---
@@ -606,14 +617,14 @@ usage() {
 cmd=run
 case ${1:-} in
   detect | install | run | version | versions)
-    cmd=$1
+    cmd=${1}
     shift
     ;;
 esac
 
-if [[ $cmd == version ]]; then
-  [[ $# -eq 1 ]] || usage 2
-  version "$1"
+if [[ ${cmd} == version ]]; then
+  [[ ${#} -eq 1 ]] || usage 2
+  version "${1}"
   exit
 fi
 
@@ -622,8 +633,8 @@ LINT_LANGUAGES=${LINT_LANGUAGES:-}
 split LANGS "${LINT_LANGUAGES//[\[\]\"]/}"
 split EXCLUDES "${LINT_EXCLUDE:-}"
 split PATHS "${LINT_PATHS:-}"
-while (($#)); do
-  case $1 in
+while ((${#})); do
+  case ${1} in
     --languages)
       split LANGS "${2:?--languages needs a value}"
       shift 2
@@ -633,9 +644,9 @@ while (($#)); do
       shift 2
       ;;
     -h | --help) usage ;;
-    -*) die "unknown option $1" ;;
+    -*) die "unknown option ${1}" ;;
     *)
-      PATHS+=("$1")
+      PATHS+=("${1}")
       shift
       ;;
   esac
@@ -647,11 +658,11 @@ fi
 collect_files
 select_languages
 
-if [[ $cmd != detect ]]; then
+if [[ ${cmd} != detect ]]; then
   validate_inputs
 fi
 
-case $cmd in
+case ${cmd} in
   detect) print_json "${SELECTED[@]}" ;;
   install) install_tools ;;
   run) run_linters ;;

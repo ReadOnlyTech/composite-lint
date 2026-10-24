@@ -271,9 +271,9 @@ runs:
         lint="${GITHUB_ACTION_PATH}/bin/lint.sh"
         echo "tools=$("${lint}" versions | sha256sum | cut -c1-16)" >>"${GITHUB_OUTPUT}"
         status=0
-        "${lint}" install || status=$?
+        "${lint}" install || status=${?}
         echo "installed=$((status == 0))" >>"${GITHUB_OUTPUT}"
-        "${lint}" run || status=$?
+        "${lint}" run || status=${?}
         exit "${status}"
 
     # saved even when linting fails, but only if every tool installed and the restored entry wasn't already this one

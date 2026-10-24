@@ -1,0 +1,10 @@
+---
+
+version: 2
+
+updates:
+  # Expected to fail zizmor dependabot-cooldown: updates are opened with no cooldown
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
