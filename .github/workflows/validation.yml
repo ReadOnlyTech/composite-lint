@@ -1,0 +1,36 @@
+# yamllint disable rule:line-length
+---
+
+name: Lint and Test
+
+on:  # yamllint disable-line rule:truthy
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+
+permissions: {}
+
+jobs:
+  validate:
+    name: Lint and test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Lint repo, minus intentionally failing test
+        uses: $/
+        with:
+          exclude: tests/fail
+          go-version-file: tests/pass/go/go.mod
+
+      - name: Run test fixtures
+        if: ${{ !cancelled() }}
+        run: tests/run.sh

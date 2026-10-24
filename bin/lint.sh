@@ -21,7 +21,7 @@
 #
 # Exit codes: 0 clean, 1 lint failures, 2 invalid usage/inputs or a language couldn't be set up.
 
-set -eo pipefail
+set -euo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 LANGUAGES='actions docker go python shell terraform woke yaml'
@@ -221,7 +221,7 @@ binary_url() {
 
 # The installers run in a context where `set -e` is ignored, so every step checks its own result.
 
-# ponytail: no checksum verification; a checksum fetched from the same release only catches corruption.
+# no checksum verification; a checksum fetched from the same release only catches corruption.
 # Pin hashes per version in versions/ if supply-chain verification is needed.
 install_binary() {
   local dest=${CACHE}/tools/${1}/${2} url tmp
