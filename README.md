@@ -9,7 +9,7 @@ All-in-one opinionated selection of linters &amp; config.
   with:
     persist-credentials: false
 
-- uses: ReadOnlyTech/composite-lint@v1
+- uses: ReadOnlyTech/composite-lint@v0
   with:
     # optional; detected from the files present otherwise
     languages: python, shell, yaml
