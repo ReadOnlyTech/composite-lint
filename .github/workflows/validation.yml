@@ -5,6 +5,10 @@ name: Lint and Test
 
 on:  # yamllint disable-line rule:truthy
   pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
   push:
     branches:
       - main
