@@ -27,16 +27,19 @@ See [`action.yml`](action.yml) for all inputs.
     languages: python,shell
     python-version-file: src/main/python/.python-version
     shellcheck-config: .shellcheckrc
-    shellcheck-version: 0.9
+    shellcheck-version: 0.9.0
 ```
 
-Only the tools needed for the selected `languages` (defaulting to auto-detection) are installed. Every language /
-tool version can be overridden with `<tool>-version` or `<tool>-version-file`, and its config with `<tool>-config`;
-anything unset uses what's bundled in[`versions/`](versions) and [`configs/`](configs).  As a general rule, these
-default versions are "latest stable" and the default configs are "very strict".
+Only the tools needed for the selected `languages` (defaulting to
+auto-detection) are installed. Every language / tool version can be overridden
+with `<tool>-version` or `<tool>-version-file`, and its config with
+`<tool>-config`; anything unset uses what's bundled in [`versions/`](versions)
+and [`configs/`](configs). As a general rule, these default versions are
+"latest stable" and the default configs are "very strict".
 
-The linters, Go's module/build caches, golangci-lint's analysis cache, and Terraform providers are kept in the Actions
-cache, and count toward your repo's cache quota. Set `cache: false` to turn that off.
+The linters, Go's module/build caches, golangci-lint's analysis cache, and
+Terraform providers are kept in the Actions cache, and count toward your repo's
+cache quota. Set `cache: false` to turn that off.
 
 ## Supported Languages / Ecosystems
 
@@ -46,11 +49,12 @@ Using `hadolint`.
 
 ### GitHub Actions
 
-Using `actionlint`, `yamllint`, and `zizmor`.
+Using `actionlint`, `yamllint -s`, and `zizmor --persona auditor` (online when
+`GH_TOKEN` / `gh auth token` is available).
 
 ### Go
 
-Using `golangci`.
+Using `golangci-lint` and `go mod tidy`.
 
 ### Python
 
@@ -58,15 +62,16 @@ Using `flake8`.
 
 ### Shell
 
-Using `shellcheck`.
+Using `shellcheck` (with the default config equivalent to `-x`).
 
 ### Terraform
 
-Using `terraform` and `tflint`.
+Using `terraform validate`, `terraform fmt -check -diff`, and `tflint` (with
+the default config using the `recommended` preset).
 
 ### YAML
 
-Using `yamllint`.
+Using `yamllint -s`.
 
 ## Other Checks
 
@@ -75,17 +80,18 @@ Using `yamllint`.
 ## Running Locally
 
 ```sh
-# installs pinned tools into ~/.cache/composite-lint
+# installs pinned tools into the cache
 bin/lint.sh install
 
 # lints the current dir (`.`)
 bin/lint.sh
 
-$ lints the target language, excluding one dir and targeting another
+# lints the target language, excluding one dir and targeting another
 bin/lint.sh --languages shell --exclude tests/fail path/to/dir
 ```
 
-Settings come from the same `LINT_*` environment variables the action uses; see `bin/lint.sh --help`.
+Settings come from the same `LINT_*` environment variables the action uses; see
+`bin/lint.sh --help`.
 
 ## Development
 
@@ -97,5 +103,5 @@ bin/lint.sh --exclude tests/fail
 tests/run.sh
 ```
 
-Each `tests/fail/<language>/<case>/` holds the files to lint, plus an `expect` file containing a regex that must
-appear in the output.
+Each `tests/fail/<language>/<case>/` holds the files to lint, plus an `expect`
+file containing a regex that must appear in the output.

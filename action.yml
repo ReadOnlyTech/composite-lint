@@ -17,17 +17,17 @@ inputs:
     required: false
     default: 'true'
   exclude:
-    description: Git pathspecs to exclude, whitespace-separated.
+    description: Git pathspecs to exclude, comma- or whitespace-separated.
     required: false
   github-token:
     description: Token for zizmor's online audits and TFLint plugin downloads.
     required: false
     default: ${{ github.token }}
   languages:
-    description: Languages to lint, comma- or whitespace-separated (actions, docker, go, python, shell, terraform, woke, yaml). Detected from the files present if empty.
+    description: 'Languages to lint, comma- or whitespace-separated. Choices: actions, docker, go, python, shell, terraform, woke, yaml. If empty, auto-detected from the files present.'
     required: false
   paths:
-    description: Paths to lint, whitespace-separated.
+    description: Paths to lint, comma- or whitespace-separated.
     required: false
     default: .
 

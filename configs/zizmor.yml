@@ -8,3 +8,4 @@ rules:
         advanced-security/*: ref-pin
         github/*: ref-pin
         octokit/*: ref-pin
+        ReadOnlyTech/*: ref-pin
