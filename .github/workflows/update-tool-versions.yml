@@ -83,6 +83,5 @@ jobs:
             --head "${PR_BRANCH}" \
             --base "${BASE_BRANCH}"
 
-          # Events caused by GITHUB_TOKEN don't start workflows (pull_request_target included), but dispatching one is
-          # allowed; its checks land on the PR's head commit, so they show on the PR
-          # gh workflow run validation.yml --ref "${PR_BRANCH}"
+          # Events caused by GITHUB_TOKEN don't start workflows (pull_request_target included),
+          # so the validation workflow will have to be manually approved on that PR!
