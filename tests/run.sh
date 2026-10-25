@@ -18,6 +18,13 @@ unset GITHUB_ACTIONS
 # this repo's .composite-lint.yml excludes tests/fail, which is exactly what these lint
 export LINT_CONFIG_FILE=/dev/null
 
+# Created here rather than committed: the runner can't download an action whose repo contains a broken symlink. It's
+# still linted, being untracked but not ignored.
+broken_symlink=tests/fail/pre-commit/broken-symlink/link
+readonly broken_symlink
+ln -sf missing.txt "${broken_symlink}"
+trap 'rm -f "${broken_symlink}"' EXIT
+
 fail() {
   echo "FAIL: ${*}"
   failures=$((failures + 1))
