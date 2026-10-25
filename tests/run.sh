@@ -57,6 +57,16 @@ else
   echo 'ok: a language that fails setup is skipped without stopping the others'
 fi
 
+# Without the guards, this config's hooks would run the linter again, which would run them again, and never finish
+output=$(LINT_PRE_COMMIT_CONFIG=tests/pre-commit-nested.yaml "${lint}" --languages pre-commit tests/pass/pre-commit 2>&1)
+status=${?}
+if ((status)); then
+  echo "${output}"
+  fail "nested pre-commit: expected the hooks running composite-lint to be skipped, got ${status}"
+else
+  echo "ok: a pre-commit config that runs composite-lint doesn't recurse"
+fi
+
 for case in tests/fail/*/*/; do
   case=${case%/}
   lang=${case#tests/fail/}

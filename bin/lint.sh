@@ -576,8 +576,11 @@ lint_go() {
 lint_pre_commit() {
   export PRE_COMMIT_HOME=${PRE_COMMIT_HOME:-${CACHE}/pre-commit}
   readonly PRE_COMMIT_HOME
-  # pre-commit lists every hook even when it passes
-  quiet each pre-commit run -c "$(config pre-commit)" --files
+  # A config that includes this linter's own hook would run it again, which would run pre-commit again, forever. This
+  # run already covers everything, so skip the hook, and mark the nested run (see main) in case it has another id.
+  # pre-commit lists every hook even when it passes, hence quiet
+  quiet each env LINT_NESTED=true "SKIP=composite-lint${SKIP:+,${SKIP}}" \
+    pre-commit run -c "$(config pre-commit)" --files
 }
 
 lint_python() {
@@ -716,6 +719,11 @@ usage() {
   sed -n '3,/^$/s/^# \{0,1\}//p' "${BASH_SOURCE[0]}"
   exit "${1:-0}"
 }
+
+if [[ ${LINT_NESTED:-} == true ]]; then
+  echo "lint: skipping; already running inside composite-lint's pre-commit check, which covers these files" >&2
+  exit 0
+fi
 
 cmd=run
 case ${1:-} in

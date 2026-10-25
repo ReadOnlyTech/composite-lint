@@ -1,0 +1,15 @@
+---
+
+# A config that includes composite-lint's own hook, as a project using both
+# might pass as pre-commit-config: once by its id, and once under another
+repos:
+  - repo: local
+    hooks:
+      - id: composite-lint
+        name: composite-lint
+        entry: bin/lint.sh
+        language: script
+      - id: wrapped
+        name: composite-lint under another id
+        entry: bin/lint.sh
+        language: script
