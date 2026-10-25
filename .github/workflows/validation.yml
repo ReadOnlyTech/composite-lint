@@ -6,6 +6,8 @@ name: Lint and Test
 on:  # yamllint disable-line rule:truthy
   pull_request:
   push:
+    branches:
+      - main
   workflow_dispatch:
 
 concurrency:
