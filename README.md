@@ -14,8 +14,20 @@ See [`action.yml`](action.yml) for all inputs.
   with:
     persist-credentials: false
 
-- name: Run linting
+- name: Run linting (strict, autodetect)
   uses: ReadOnlyTech/composite-lint@v0
+
+- name: Run linting (custom)
+  uses: ReadOnlyTech/composite-lint@v0
+  with:
+    cache: false
+    paths: src
+    exclude: 'src/build/*.py,src/scripts/*.sh'
+    github-token: ${{ secrets.MY_GH_TOKEN }}
+    languages: python,shell
+    python-version-file: src/main/python/.python-version
+    shellcheck-config: .shellcheckrc
+    shellcheck-version: 0.9
 ```
 
 Only the tools needed for the selected `languages` (defaulting to auto-detection) are installed. Every language /
