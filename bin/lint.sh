@@ -3,7 +3,7 @@
 # Detects which languages are present, installs pinned linters for them, and runs them.
 #
 # Usage:
-#   lint [run]   [--languages a,b] [--exclude pathspec]... [path...]
+#   lint [run]   [--install] [--languages a,b] [--exclude pathspec]... [path...]   # --install: install first
 #   lint detect  [--languages a,b] [--exclude pathspec]... [path...]
 #   lint install [--languages a,b] [--exclude pathspec]... [path...]
 #   lint versions [--languages a,b] [--exclude pathspec]... [path...]   # each needed tool and its version
@@ -24,8 +24,8 @@
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-LANGUAGES='actions docker go python shell terraform woke yaml'
-PIP_TOOLS=' flake8 yamllint zizmor '
+LANGUAGES='actions docker go pre-commit python shell terraform woke yaml'
+PIP_TOOLS=' flake8 pre-commit yamllint zizmor '
 CACHE=${LINT_CACHE:-${RUNNER_TOOL_CACHE:-${XDG_CACHE_HOME:-${HOME}/.cache}}/composite-lint}
 readonly ROOT LANGUAGES PIP_TOOLS CACHE
 
@@ -136,6 +136,7 @@ bundled_config() {
     actionlint) echo actionlint.yml ;;
     flake8) echo flake8.ini ;;
     hadolint) echo hadolint.yml ;;
+    pre-commit) echo pre-commit.yaml ;;
     shellcheck) echo shellcheckrc ;;
     tflint) echo tflint.hcl ;;
     yamllint) echo yamllint.yml ;;
@@ -166,6 +167,7 @@ tools_for() {
     actions) echo actionlint shellcheck zizmor ;;
     docker) echo hadolint ;;
     go) echo golangci-lint ;;
+    pre-commit) echo pre-commit ;;
     python) echo flake8 ;;
     shell) echo shellcheck ;;
     terraform) echo tflint ;;
@@ -373,6 +375,10 @@ print_versions() {
   local tool
   for tool in $(selected_tools); do
     echo "${tool} $(version "${tool}")"
+    # these configs pin the versions of what the tools install (TFLint's ruleset, pre-commit's hooks)
+    case ${tool} in
+      pre-commit | tflint) echo "${tool} config $(cksum <"$(config "${tool}")")" ;;
+    esac
   done
 }
 
@@ -390,7 +396,8 @@ collect_files() {
   readonly list
   FILES=()
   while IFS= read -r f; do
-    if [[ -f ${f} ]]; then
+    # broken symlinks are kept for pre-commit (check-symlinks by default)
+    if [[ -f ${f} || -L ${f} ]]; then
       FILES+=("${f}")
     fi
   done <<<"${list}"
@@ -416,6 +423,7 @@ matches() {
       [[ ${base} == action.yml || ${base} == action.yaml ]] ;;
     docker) [[ ${base} == *Dockerfile* || ${base} == *.dockerfile || ${base} == Containerfile* ]] ;;
     go) [[ ${base} == go.mod ]] ;;
+    pre-commit) true ;;
     python) [[ ${base} == *.py ]] ;;
     shell) [[ ${base} == *.sh || ${base} == *.bash ]] || { [[ ${base} != *.* ]] && is_shell_script "${2}"; } ;;
     terraform) [[ ${base} == *.tf ]] ;;
@@ -428,6 +436,10 @@ files_for() {
   local f
   LANG_FILES=()
   for f in "${FILES[@]}"; do
+    # only pre-commit gets broken symlinks, so check-symlinks can report them rather than every linter failing on them
+    if [[ ${1} != pre-commit && ! -e ${f} ]]; then
+      continue
+    fi
     if matches "${1}" "${f}"; then
       LANG_FILES+=("${f}")
     fi
@@ -465,9 +477,21 @@ print_json() {
 
 # --- linters ---
 # Each runs every check for its language against LANG_FILES and returns 1 if any failed.
-# zizmor and woke respect .gitignore, so without excludes (which they wouldn't know about) they're given the paths and
-# find files themselves. The rest always get LANG_FILES: yamllint and flake8 would lint gitignored dirs like .venv,
-# and neither hadolint nor shellcheck searches directories.
+# zizmor and woke respect .gitignore, so they're left to find files themselves when that's equivalent (see
+# self_discovery). The rest always get LANG_FILES: yamllint and flake8 would lint gitignored dirs like .venv, and
+# neither hadolint nor shellcheck searches directories.
+
+# Whether tools can be given the paths to search themselves: only when they're all directories (e.g. pre-commit
+# passes every file, which zizmor rejects unless it's YAML) and there are no excludes, which they wouldn't know about
+self_discovery() {
+  local p
+  if ((${#EXCLUDES[@]})); then
+    return 1
+  fi
+  for p in "${PATHS[@]}"; do
+    [[ -d ${p} ]] || return 1
+  done
+}
 
 each() {
   printf '%s\0' "${LANG_FILES[@]}" | xargs -0 "${@}"
@@ -512,7 +536,7 @@ lint_actions() {
     zizmor_opts+=(--format github)
   fi
   readonly zizmor_opts
-  if ((${#EXCLUDES[@]})); then
+  if ! self_discovery; then
     quiet zizmor "${zizmor_opts[@]}" "${LANG_FILES[@]}" || rc=1
   else
     quiet zizmor "${zizmor_opts[@]}" "${PATHS[@]}" || rc=1
@@ -548,6 +572,14 @@ lint_go() {
   return ${rc}
 }
 
+# Runs the hooks in the pre-commit config (by default, detect-private-key and check-symlinks) on the files
+lint_pre_commit() {
+  export PRE_COMMIT_HOME=${PRE_COMMIT_HOME:-${CACHE}/pre-commit}
+  readonly PRE_COMMIT_HOME
+  # pre-commit lists every hook even when it passes
+  quiet each pre-commit run -c "$(config pre-commit)" --files
+}
+
 lint_python() {
   each flake8 --config "$(config flake8)"
 }
@@ -558,17 +590,17 @@ lint_shell() {
 
 # Inits without a backend, keeping .terraform out of the checkout and leaving any lock file as it was found
 terraform_validate() {
-  local dir=${1} lock=${1}/.terraform.lock.hcl rc=0 output lockfile_opts=()
+  local dir=${1} lock=${1}/.terraform.lock.hcl rc=0 data output lockfile_opts=()
   readonly dir lock
   if [[ -f ${lock} ]]; then
     lockfile_opts=(-lockfile=readonly)
   fi
-  readonly lockfile_opts
+  data=$(mktemp -d "${TF_DATA_ROOT}/XXXXXX")
+  readonly data lockfile_opts
 
-  if ! output=$(TF_DATA_DIR=$(mktemp -d "${TF_DATA_ROOT}/XXXXXX") &&
-    export TF_DATA_DIR &&
-    terraform -chdir="${dir}" init -backend=false -input=false "${lockfile_opts[@]}" 2>&1 &&
-    terraform -chdir="${dir}" validate 2>&1); then
+  # only the step that failed is shown, so a successful init's chatter doesn't bury validate's errors
+  if ! output=$(TF_DATA_DIR=${data} terraform -chdir="${dir}" init -backend=false -input=false "${lockfile_opts[@]}" 2>&1) ||
+    ! output=$(TF_DATA_DIR=${data} terraform -chdir="${dir}" validate 2>&1); then
     echo "${output}"
     rc=1
   fi
@@ -580,22 +612,55 @@ terraform_validate() {
   return ${rc}
 }
 
-lint_terraform() {
-  local rc=0 dir f cfg
-  cfg=$(config tflint)
-  TF_DATA_ROOT=$(mktemp -d)
-  export TF_PLUGIN_CACHE_DIR=${TF_PLUGIN_CACHE_DIR:-${CACHE}/terraform-plugins}
-  readonly cfg TF_DATA_ROOT TF_PLUGIN_CACHE_DIR
-  mkdir -p "${TF_PLUGIN_CACHE_DIR}"
-
-  quiet tflint --init -c "${cfg}" || rc=1
-  while IFS= read -r dir; do
+# Every check for one directory, saving the output so parallel runs can be printed in order afterwards
+terraform_dir() {
+  local dir=${1} out=${TF_DATA_ROOT}/out/dir${1//\//%} rc=0
+  readonly dir out
+  {
     terraform fmt -check -diff "${dir}" || rc=1
     terraform_validate "${dir}" || rc=1
-    tflint --chdir="${dir}" -c "${cfg}" || rc=1
+    tflint --chdir="${dir}" -c "${TFLINT_CONFIG}" || rc=1
+  } >"${out}" 2>&1
+  readonly rc
+  return ${rc}
+}
+
+lint_terraform() {
+  local rc=0 dir f dirs=()
+  TFLINT_CONFIG=$(config tflint)
+  TF_DATA_ROOT=$(mktemp -d)
+  export TF_PLUGIN_CACHE_DIR=${TF_PLUGIN_CACHE_DIR:-${CACHE}/terraform-plugins}
+  export TFLINT_PLUGIN_DIR=${TFLINT_PLUGIN_DIR:-${CACHE}/tflint-plugins}
+  readonly TFLINT_CONFIG TF_DATA_ROOT TF_PLUGIN_CACHE_DIR TFLINT_PLUGIN_DIR
+  # for the parallel runs
+  export TFLINT_CONFIG TF_DATA_ROOT
+  export -f terraform_dir terraform_validate
+  mkdir -p "${TF_PLUGIN_CACHE_DIR}" "${TFLINT_PLUGIN_DIR}" "${TF_DATA_ROOT}/out"
+
+  quiet tflint --init -c "${TFLINT_CONFIG}" || rc=1
+  while IFS= read -r dir; do
+    dirs+=("${dir}")
   done < <(for f in "${LANG_FILES[@]}"; do dirname "${f}"; done | sort -u)
+  readonly dirs
+
+  # The first directory runs alone so its init fills the plugin cache; the rest then read from it, rather than racing
+  # to write the same providers (which the cache doesn't support)
+  terraform_dir "${dirs[0]}" || rc=1
+  if ((${#dirs[@]} > 1)); then
+    # ${1} is the child bash's argument, so it mustn't expand here
+    # shellcheck disable=SC2016
+    printf '%s\0' "${dirs[@]:1}" |
+      xargs -0 -n 1 -P "$(getconf _NPROCESSORS_ONLN)" bash -c 'terraform_dir "${1}"' _ || rc=1
+  fi
   readonly rc
 
+  for dir in "${dirs[@]}"; do
+    f=${TF_DATA_ROOT}/out/dir${dir//\//%}
+    if [[ -s ${f} ]]; then
+      echo "-- ${dir}"
+      cat "${f}"
+    fi
+  done
   rm -rf "${TF_DATA_ROOT}"
   return ${rc}
 }
@@ -611,7 +676,7 @@ lint_woke() {
     opts+=(-o github-actions)
   fi
   readonly opts
-  if ((${#EXCLUDES[@]})); then
+  if ! self_discovery; then
     quiet each woke "${opts[@]}"
   else
     quiet woke "${opts[@]}" "${PATHS[@]}"
@@ -636,7 +701,7 @@ run_linters() {
     if ! setup_language "${lang}"; then
       error "skipping ${lang} checks; it couldn't be set up"
       status=2
-    elif ! "lint_${lang}"; then
+    elif ! "lint_${lang//-/_}"; then
       ((status)) || status=1
     fi
     endgroup
@@ -673,8 +738,13 @@ readonly LINT_LANGUAGES
 split LANGS "${LINT_LANGUAGES//[\[\]\"]/}"
 split EXCLUDES "${LINT_EXCLUDE:-}"
 split PATHS "${LINT_PATHS:-}"
+install=false
 while ((${#})); do
   case ${1} in
+    --install)
+      install=true
+      shift
+      ;;
     --languages)
       split LANGS "${2:?--languages needs a value}"
       shift 2
@@ -691,7 +761,7 @@ while ((${#})); do
       ;;
   esac
 done
-readonly LANGS EXCLUDES
+readonly install LANGS EXCLUDES
 if ! ((${#PATHS[@]})); then
   PATHS=(.)
 fi
@@ -707,6 +777,12 @@ fi
 case ${cmd} in
   detect) print_json "${SELECTED[@]}" ;;
   install) install_tools ;;
-  run) run_linters ;;
+  run)
+    # a tool that fails to install only fails the languages that need it
+    if [[ ${install} == true ]]; then
+      install_tools || true
+    fi
+    run_linters
+    ;;
   versions) print_versions ;;
 esac

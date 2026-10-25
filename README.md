@@ -67,7 +67,7 @@ Using `shellcheck` (with the default config equivalent to `-x`).
 ### Terraform
 
 Using `terraform validate`, `terraform fmt -check -diff`, and `tflint` (with
-the default config using the `recommended` preset).
+the default config using the `all` preset), run on each directory in parallel.
 
 ### YAML
 
@@ -75,6 +75,11 @@ Using `yamllint -s`.
 
 ## Other Checks
 
+On by default, unless left out of a custom `languages` list:
+
+- `pre-commit`: runs the hooks in [`configs/pre-commit.yaml`](configs/pre-commit.yaml)
+  (`detect-private-key` and `check-symlinks`), or in your own config via
+  `pre-commit-config`
 - `woke`
 
 ## Running Locally
@@ -86,12 +91,28 @@ bin/lint.sh install
 # lints the current dir (`.`)
 bin/lint.sh
 
+# does both the above
+bin/lint.sh --install run
+
 # lints the target language, excluding one dir and targeting another
 bin/lint.sh --languages shell --exclude tests/fail path/to/dir
 ```
 
 Settings come from the same `LINT_*` environment variables the action uses; see
-`bin/lint.sh --help`.
+`bin/lint.sh --help` for that info and more options.
+
+### With pre-commit
+
+```yaml
+repos:
+  - repo: https://github.com/ReadOnlyTech/composite-lint
+    rev: vX.Y.Z  # an exact release; pre-commit warns about floating tags like v0
+    hooks:
+      - id: composite-lint
+```
+
+The hook installs the pinned tools as needed and lints the files pre-commit
+passes in, the same way the action does.
 
 ## Development
 

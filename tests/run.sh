@@ -21,7 +21,7 @@ fail() {
   failures=$((failures + 1))
 }
 
-expected='["actions","docker","go","python","shell","terraform","woke","yaml"]'
+expected='["actions","docker","go","pre-commit","python","shell","terraform","woke","yaml"]'
 actual=$("${lint}" detect tests/pass)
 readonly expected actual
 if [[ ${actual} != "${expected}" ]]; then

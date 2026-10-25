@@ -24,7 +24,7 @@ inputs:
     required: false
     default: ${{ github.token }}
   languages:
-    description: 'Languages to lint, comma- or whitespace-separated. Choices: actions, docker, go, python, shell, terraform, woke, yaml. If empty, auto-detected from the files present.'
+    description: 'Languages to lint, comma- or whitespace-separated. Choices: actions, docker, go, pre-commit, python, shell, terraform, woke, yaml. If empty, auto-detected from the files present.'
     required: false
   paths:
     description: Paths to lint, comma- or whitespace-separated.
@@ -72,6 +72,15 @@ inputs:
     required: false
   hadolint-version-file:
     description: File containing the hadolint version.
+    required: false
+  pre-commit-config:
+    description: pre-commit config file (by default, the bundled one runs detect-private-key and check-symlinks).
+    required: false
+  pre-commit-version:
+    description: pre-commit version.
+    required: false
+  pre-commit-version-file:
+    description: File containing the pre-commit version.
     required: false
   python-version:
     description: Python version used to run the Python-based linters.
@@ -155,7 +164,7 @@ runs:
     # them and still runs the rest. setup-python falls back to the runner's own python3.
     - name: Set up Python
       id: python
-      if: contains(fromJSON(steps.detect.outputs.languages), 'actions') || contains(fromJSON(steps.detect.outputs.languages), 'python') || contains(fromJSON(steps.detect.outputs.languages), 'yaml')
+      if: contains(fromJSON(steps.detect.outputs.languages), 'actions') || contains(fromJSON(steps.detect.outputs.languages), 'pre-commit') || contains(fromJSON(steps.detect.outputs.languages), 'python') || contains(fromJSON(steps.detect.outputs.languages), 'yaml')
       uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
       continue-on-error: true
       with:
@@ -206,6 +215,8 @@ runs:
         path: |
           ${{ runner.tool_cache }}/composite-lint/tools
           ${{ runner.tool_cache }}/composite-lint/venv
+          ${{ runner.tool_cache }}/composite-lint/pre-commit
+          ${{ runner.tool_cache }}/composite-lint/tflint-plugins
         restore-keys: composite-lint-tools-${{ runner.os }}-${{ runner.arch }}-py${{ steps.python.outputs.python-version }}-
 
     - name: Cache golangci-lint analysis
@@ -246,6 +257,9 @@ runs:
         LINT_HADOLINT_VERSION_FILE: ${{ inputs.hadolint-version-file }}
         LINT_LANGUAGES: ${{ steps.detect.outputs.languages }}
         LINT_PATHS: ${{ inputs.paths }}
+        LINT_PRE_COMMIT_CONFIG: ${{ inputs.pre-commit-config }}
+        LINT_PRE_COMMIT_VERSION: ${{ inputs.pre-commit-version }}
+        LINT_PRE_COMMIT_VERSION_FILE: ${{ inputs.pre-commit-version-file }}
         # a restored cache would otherwise keep every version it's ever held
         LINT_PRUNE: ${{ steps.tools-cache.outcome == 'success' }}
         LINT_PYTHON: ${{ steps.python.outputs.python-path }}
@@ -289,3 +303,5 @@ runs:
         path: |
           ${{ runner.tool_cache }}/composite-lint/tools
           ${{ runner.tool_cache }}/composite-lint/venv
+          ${{ runner.tool_cache }}/composite-lint/pre-commit
+          ${{ runner.tool_cache }}/composite-lint/tflint-plugins

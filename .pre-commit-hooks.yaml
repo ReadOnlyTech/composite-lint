@@ -1,0 +1,14 @@
+---
+
+# Runs the same checks as the action against the files pre-commit passes in,
+# installing the pinned linters into ~/.cache/composite-lint as needed. Options
+# go in `args`, e.g. `args: [--languages, 'shell,yaml']`; tool versions and
+# configs come from the same LINT_* environment variables as bin/lint.sh.
+- id: composite-lint
+  name: composite-lint
+  description: Opinionated all-in-one linting
+  entry: bin/lint.sh --install
+  language: script
+  # One run over every file, rather than parallel batches that would each
+  # install and detect separately
+  require_serial: true
