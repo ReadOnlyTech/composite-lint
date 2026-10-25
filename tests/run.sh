@@ -10,6 +10,7 @@ set -o pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 2
 lint=bin/lint.sh
+readonly lint
 failures=0
 
 # plain output so expectations don't depend on CI annotation formats
@@ -22,6 +23,7 @@ fail() {
 
 expected='["actions","docker","go","python","shell","terraform","woke","yaml"]'
 actual=$("${lint}" detect tests/pass)
+readonly expected actual
 if [[ ${actual} != "${expected}" ]]; then
   fail "detect tests/pass: expected ${expected}, got ${actual}"
 else
@@ -72,6 +74,7 @@ for case in tests/fail/*/*/; do
     echo "ok: ${case}"
   fi
 done
+readonly failures
 
 if ((failures)); then
   echo "${failures} failure(s)"

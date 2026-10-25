@@ -27,6 +27,7 @@ ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 LANGUAGES='actions docker go python shell terraform woke yaml'
 PIP_TOOLS=' flake8 yamllint zizmor '
 CACHE=${LINT_CACHE:-${RUNNER_TOOL_CACHE:-${XDG_CACHE_HOME:-${HOME}/.cache}}/composite-lint}
+readonly ROOT LANGUAGES PIP_TOOLS CACHE
 
 die() {
   echo "lint: ${*}" >&2
@@ -104,6 +105,7 @@ version() {
   raw=${!raw:-}
   file=${key}_VERSION_FILE
   file=${!file:-}
+  readonly key raw file
 
   if [[ -n ${raw} && -n ${file} ]]; then
     die "set only one of ${key}_VERSION and ${key}_VERSION_FILE"
@@ -117,6 +119,7 @@ version() {
   else
     v=$(sed -n "s/^${1}==//p" "${ROOT}/versions/pip/requirements.txt")
   fi
+  readonly v
 
   [[ -n ${v} ]] || die "no version found for ${1}"
 
@@ -146,6 +149,7 @@ config() {
   var=$(env_key "${1}")_CONFIG
   path=${!var:-}
   bundled=$(bundled_config "${1}")
+  readonly var path bundled
 
   if [[ -n ${path} ]]; then
     [[ -f ${path} ]] || die "${var}: ${path} not found"
@@ -177,6 +181,7 @@ is_pip() {
 tool_dir() {
   local v
   v=$(version "${1}")
+  readonly v
   if is_pip "${1}"; then
     echo "${CACHE}/venv/${1}-${v}/bin"
   else
@@ -191,11 +196,13 @@ platform() {
     aarch64 | arm64) ARCH=arm64 ;;
     *) die "unsupported architecture: $(uname -m)" ;;
   esac
+  readonly OS ARCH
 }
 
 # Takes the release tag; some asset names use the version without its `v`
 binary_url() {
   local tag=${2} v=${2#v} gh=https://github.com
+  readonly tag v gh
   case ${1} in
     actionlint)
       echo "${gh}/rhysd/actionlint/releases/download/${tag}/actionlint_${v}_${OS}_${ARCH}.tar.gz" ;;
@@ -205,10 +212,12 @@ binary_url() {
       local os=${OS} arch=x86_64
       [[ ${OS} == darwin ]] && os=macos
       [[ ${ARCH} == arm64 ]] && arch=arm64
+      readonly os arch
       echo "${gh}/hadolint/hadolint/releases/download/${tag}/hadolint-${os}-${arch}" ;;
     shellcheck)
       local arch=x86_64
       [[ ${ARCH} == arm64 ]] && arch=aarch64
+      readonly arch
       echo "${gh}/koalaman/shellcheck/releases/download/${tag}/shellcheck-${tag}.${OS}.${arch}.tar.gz" ;;
     tflint)
       echo "${gh}/terraform-linters/tflint/releases/download/${tag}/tflint_${OS}_${ARCH}.zip" ;;
@@ -225,11 +234,14 @@ binary_url() {
 # Pin hashes per version in versions/ if supply-chain verification is needed.
 install_binary() {
   local dest=${CACHE}/tools/${1}/${2} url tmp
+  readonly dest
   [[ -x ${dest}/${1} ]] && return
   url=$(binary_url "${1}" "${2}")
+  readonly url
   echo "Installing ${1} ${2} from ${url}"
 
   tmp=$(mktemp -d) || return 1
+  readonly tmp
   if ! curl -fsSL "${url}" -o "${tmp}/download"; then
     rm -rf "${tmp}"
     return 1
@@ -247,6 +259,7 @@ install_binary() {
 
 install_pip() {
   local venv=${CACHE}/venv/${1}-${2}
+  readonly venv
   # a venv breaks if the Python it was made from has gone, e.g. after an upgrade
   if [[ -x ${venv}/bin/${1} ]] && "${venv}/bin/python" -c '' 2>/dev/null; then
     return
@@ -303,6 +316,7 @@ install_tools() {
       status=2
     }
   done
+  readonly keep status
 
   if [[ ${LINT_PRUNE:-} == true ]]; then
     for path in "${CACHE}"/tools/*/* "${CACHE}"/venv/*; do
@@ -342,6 +356,7 @@ setup_language() {
   for tool in $(runtimes_for "${1}"); do
     need "${tool}" || status=1
   done
+  readonly status
   return ${status}
 }
 
@@ -368,25 +383,30 @@ collect_files() {
   for p in "${EXCLUDES[@]}"; do
     spec+=(":(exclude)${p}")
   done
+  readonly spec
 
   git rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "not inside a git repository"
   list=$(git ls-files -co --exclude-standard -- "${spec[@]}") || die "couldn't list files"
+  readonly list
   FILES=()
   while IFS= read -r f; do
     if [[ -f ${f} ]]; then
       FILES+=("${f}")
     fi
   done <<<"${list}"
+  readonly FILES
 }
 
 is_shell_script() {
   local line
   IFS= read -r line <"${1}" || true
+  readonly line
   [[ ${line} =~ ^#!.*[/[:space:]](ba|da|k)?sh([[:space:]]|$) ]]
 }
 
 matches() {
   local base=${2##*/}
+  readonly base
   case ${1} in
     actions)
       case ${2} in
@@ -430,6 +450,7 @@ select_languages() {
       fi
     done
   fi
+  readonly SELECTED
 }
 
 print_json() {
@@ -454,8 +475,10 @@ each() {
 
 # For tools with no option to stay silent when they succeed: only shows their output if they fail
 quiet() {
-  local output
-  if ! output=$("${@}" 2>&1); then
+  local output rc=0
+  output=$("${@}" 2>&1) || rc=${?}
+  readonly output rc
+  if ((rc)); then
     echo "${output}"
     return 1
   fi
@@ -468,9 +491,11 @@ lint_actions() {
       .github/workflows/* | */.github/workflows/*) workflows+=("${f}") ;;
     esac
   done
+  readonly workflows
 
   if ((${#workflows[@]})); then
     cfg=$(config actionlint)
+    readonly cfg
     # actionlint passes scripts to shellcheck via stdin, so the rcfile's disables have to be passed as options
     SHELLCHECK_OPTS=$(sed -n 's/^[[:space:]]*disable=/-e /p' "$(config shellcheck)" | tr '\n' ' ') \
       actionlint ${cfg:+-config-file "${cfg}"} "${workflows[@]}" || rc=1
@@ -486,11 +511,13 @@ lint_actions() {
   if [[ -n ${GITHUB_ACTIONS:-} ]]; then
     zizmor_opts+=(--format github)
   fi
+  readonly zizmor_opts
   if ((${#EXCLUDES[@]})); then
     quiet zizmor "${zizmor_opts[@]}" "${LANG_FILES[@]}" || rc=1
   else
     quiet zizmor "${zizmor_opts[@]}" "${PATHS[@]}" || rc=1
   fi
+  readonly rc
   return ${rc}
 }
 
@@ -501,9 +528,11 @@ lint_docker() {
 lint_go() {
   local rc=0 mod opts=(--no-config) cfg
   cfg=$(config golangci-lint)
+  readonly cfg
   if [[ -n ${cfg} ]]; then
     opts=(-c "${cfg}")
   fi
+  readonly opts
 
   for mod in "${LANG_FILES[@]}"; do
     (
@@ -515,6 +544,7 @@ lint_go() {
       golangci-lint run --show-stats=false "${opts[@]}" ./...
     ) || rc=1
   done
+  readonly rc
   return ${rc}
 }
 
@@ -529,9 +559,11 @@ lint_shell() {
 # Inits without a backend, keeping .terraform out of the checkout and leaving any lock file as it was found
 terraform_validate() {
   local dir=${1} lock=${1}/.terraform.lock.hcl rc=0 output lockfile_opts=()
+  readonly dir lock
   if [[ -f ${lock} ]]; then
     lockfile_opts=(-lockfile=readonly)
   fi
+  readonly lockfile_opts
 
   if ! output=$(TF_DATA_DIR=$(mktemp -d "${TF_DATA_ROOT}/XXXXXX") &&
     export TF_DATA_DIR &&
@@ -540,6 +572,7 @@ terraform_validate() {
     echo "${output}"
     rc=1
   fi
+  readonly output rc
 
   if ! ((${#lockfile_opts[@]})); then
     rm -f "${lock}"
@@ -552,6 +585,7 @@ lint_terraform() {
   cfg=$(config tflint)
   TF_DATA_ROOT=$(mktemp -d)
   export TF_PLUGIN_CACHE_DIR=${TF_PLUGIN_CACHE_DIR:-${CACHE}/terraform-plugins}
+  readonly cfg TF_DATA_ROOT TF_PLUGIN_CACHE_DIR
   mkdir -p "${TF_PLUGIN_CACHE_DIR}"
 
   quiet tflint --init -c "${cfg}" || rc=1
@@ -560,6 +594,7 @@ lint_terraform() {
     terraform_validate "${dir}" || rc=1
     tflint --chdir="${dir}" -c "${cfg}" || rc=1
   done < <(for f in "${LANG_FILES[@]}"; do dirname "${f}"; done | sort -u)
+  readonly rc
 
   rm -rf "${TF_DATA_ROOT}"
   return ${rc}
@@ -568,12 +603,14 @@ lint_terraform() {
 lint_woke() {
   local cfg opts=(--exit-1-on-failure)
   cfg=$(config woke)
+  readonly cfg
   if [[ -n ${cfg} ]]; then
     opts+=(-c "${cfg}")
   fi
   if [[ -n ${GITHUB_ACTIONS:-} ]]; then
     opts+=(-o github-actions)
   fi
+  readonly opts
   if ((${#EXCLUDES[@]})); then
     quiet each woke "${opts[@]}"
   else
@@ -604,6 +641,7 @@ run_linters() {
     fi
     endgroup
   done
+  readonly status
   return ${status}
 }
 
@@ -621,6 +659,7 @@ case ${1:-} in
     shift
     ;;
 esac
+readonly cmd
 
 if [[ ${cmd} == version ]]; then
   [[ ${#} -eq 1 ]] || usage 2
@@ -630,6 +669,7 @@ fi
 
 # also accepts detect's JSON output
 LINT_LANGUAGES=${LINT_LANGUAGES:-}
+readonly LINT_LANGUAGES
 split LANGS "${LINT_LANGUAGES//[\[\]\"]/}"
 split EXCLUDES "${LINT_EXCLUDE:-}"
 split PATHS "${LINT_PATHS:-}"
@@ -651,9 +691,11 @@ while ((${#})); do
       ;;
   esac
 done
+readonly LANGS EXCLUDES
 if ! ((${#PATHS[@]})); then
   PATHS=(.)
 fi
+readonly PATHS
 
 collect_files
 select_languages

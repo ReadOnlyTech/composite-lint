@@ -269,11 +269,13 @@ runs:
       # a tool that fails to install only fails the languages that need it, so lint regardless
       run: |
         lint="${GITHUB_ACTION_PATH}/bin/lint.sh"
+        readonly lint
         echo "tools=$("${lint}" versions | sha256sum | cut -c1-16)" >>"${GITHUB_OUTPUT}"
         status=0
         "${lint}" install || status=${?}
         echo "installed=$((status == 0))" >>"${GITHUB_OUTPUT}"
         "${lint}" run || status=${?}
+        readonly status
         exit "${status}"
 
     # saved even when linting fails, but only if every tool installed and the restored entry wasn't already this one
