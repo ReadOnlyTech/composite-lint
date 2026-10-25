@@ -7,9 +7,9 @@ repos:
     hooks:
       - id: composite-lint
         name: composite-lint
-        entry: bin/lint.sh
+        entry: bin/lint.sh run
         language: script
       - id: wrapped
         name: composite-lint under another id
-        entry: bin/lint.sh
+        entry: bin/lint.sh run
         language: script

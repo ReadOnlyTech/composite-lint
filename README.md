@@ -41,6 +41,34 @@ The linters, Go's module/build caches, golangci-lint's analysis cache, and
 Terraform providers are kept in the Actions cache, and count toward your repo's
 cache quota. Set `cache: false` to turn that off.
 
+### Config File
+
+Settings can instead live in `.composite-lint.yml` at the repo root, where the
+action, local runs, and pre-commit all read them. It takes the action's input
+names (except `cache`, `config-file`, and `github-token`) as flat `key: value`
+lines, with paths relative to the repo root. The custom example above becomes:
+
+```yaml
+---
+
+# yamllint disable-line rule:line-length
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ReadOnlyTech/composite-lint/main/composite-lint.schema.json
+paths: src
+exclude: src/build/*.py, src/scripts/*.sh
+languages: python, shell
+python-version-file: src/main/python/.python-version
+shellcheck-config: .shellcheckrc
+shellcheck-version: 0.9.0
+```
+
+Inputs (or, locally, options and `LINT_*` environment variables) take
+precedence over the file. Use the `config-file` input or `-c` option for a file
+elsewhere.
+
+The `yaml-language-server` comment points editors at
+[`composite-lint.schema.json`](composite-lint.schema.json), for completion and
+validation of the keys.
+
 ## Supported Languages / Ecosystems
 
 ### Docker
@@ -88,18 +116,19 @@ On by default, unless left out of a custom `languages` list:
 # installs pinned tools into the cache
 bin/lint.sh install
 
-# lints the current dir (`.`)
-bin/lint.sh
+# lints the repo (or the config file's `paths`)
+bin/lint.sh run
 
 # does both the above
-bin/lint.sh --install run
+bin/lint.sh run --install
 
-# lints the target language, excluding one dir and targeting another
-bin/lint.sh --languages shell --exclude tests/fail path/to/dir
+# lints one language in a dir, excluding a subdir (short forms: r, -l, -x)
+bin/lint.sh r -l shell -x path/to/dir/vendor path/to/dir
 ```
 
-Settings come from the same `LINT_*` environment variables the action uses; see
-`bin/lint.sh --help` for that info and more options.
+Settings come from the config file, or the same `LINT_*` environment variables
+the action uses; see `bin/lint.sh --help` for the details and every command and
+option.
 
 ### With pre-commit
 
@@ -112,13 +141,13 @@ repos:
 ```
 
 The hook installs the pinned tools as needed and lints the files pre-commit
-passes in, the same way the action does.
+passes in, the same way the action does, including the config file's settings.
 
 ## Development
 
 ```sh
-# lint this repo with itself
-bin/lint.sh --exclude tests/fail
+# lint this repo with itself (.composite-lint.yml excludes tests/fail)
+bin/lint.sh run
 
 # check tests/pass lints clean and each tests/fail case fails as expected
 tests/run.sh

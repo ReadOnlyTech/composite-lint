@@ -1,12 +1,12 @@
 ---
 
-# Lints this repo with itself, the same way CI does
+# Lints this repo with itself, the same way CI does (settings, like excluding
+# tests/fail, are in .composite-lint.yml)
 repos:
   - repo: local
     hooks:
       - id: composite-lint
         name: composite-lint
-        entry: bin/lint.sh --install
-        exclude: ^tests/fail/
+        entry: bin/lint.sh run --install
         language: script
         require_serial: true

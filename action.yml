@@ -10,12 +10,16 @@ branding:
   color: green
 
 # Versions: `<tool>-version` takes a raw version and `<tool>-version-file` a path to a file containing one;
-# set at most one. Configs: `<tool>-config` takes a path. Anything unset uses what's bundled with the action.
+# set at most one. Configs: `<tool>-config` takes a path. Every input except cache, config-file, and github-token can
+# also be set in the config file; inputs take precedence, and anything unset uses what's bundled with the action.
 inputs:
   cache:
     description: Whether to use the Actions cache for the linters, Go's module/build caches, golangci-lint's analysis cache, and Terraform providers.
     required: false
     default: 'true'
+  config-file:
+    description: "Settings file, as flat `key: value` lines using these inputs' names. Defaults to .composite-lint.yml in the repo root, if present."
+    required: false
   exclude:
     description: Git pathspecs to exclude, comma- or whitespace-separated.
     required: false
@@ -27,9 +31,8 @@ inputs:
     description: 'Languages to lint, comma- or whitespace-separated. Choices: actions, docker, go, pre-commit, python, shell, terraform, woke, yaml. If empty, auto-detected from the files present.'
     required: false
   paths:
-    description: Paths to lint, comma- or whitespace-separated.
+    description: Paths to lint, comma- or whitespace-separated. Defaults to the repo root.
     required: false
-    default: .
 
   actionlint-config:
     description: actionlint config file.
@@ -151,12 +154,24 @@ runs:
     - name: Detect languages
       id: detect
       env:
+        LINT_CONFIG_FILE: ${{ inputs.config-file }}
         LINT_EXCLUDE: ${{ inputs.exclude }}
+        LINT_GO_VERSION: ${{ inputs.go-version }}
+        LINT_GO_VERSION_FILE: ${{ inputs.go-version-file }}
         LINT_LANGUAGES: ${{ inputs.languages }}
         LINT_PATHS: ${{ inputs.paths }}
+        LINT_PYTHON_VERSION: ${{ inputs.python-version }}
+        LINT_PYTHON_VERSION_FILE: ${{ inputs.python-version-file }}
+        LINT_TERRAFORM_VERSION: ${{ inputs.terraform-version }}
+        LINT_TERRAFORM_VERSION_FILE: ${{ inputs.terraform-version-file }}
       shell: bash
       run: |
-        echo "languages=$("${GITHUB_ACTION_PATH}/bin/lint.sh" detect)" >>"${GITHUB_OUTPUT}"
+        lint="${GITHUB_ACTION_PATH}/bin/lint.sh"
+        readonly lint
+        echo "languages=$("${lint}" detect)" >>"${GITHUB_OUTPUT}"
+        # The runtimes' settings for the setup steps (e.g. python-version-file), resolved with the config file
+        "${lint}" versions |
+          awk '/^(go|python|terraform)-version/ { key = $1; sub(/^[^ ]+ /, ""); print key "=" $0 }' >>"${GITHUB_OUTPUT}"
         # rolls the golangci-lint cache over weekly so it doesn't go stale
         echo "week=$(date -u +%G-%V)" >>"${GITHUB_OUTPUT}"
 
@@ -168,8 +183,8 @@ runs:
       uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
       continue-on-error: true
       with:
-        python-version: ${{ inputs.python-version }}
-        python-version-file: ${{ inputs.python-version-file || (inputs.python-version == '' && format('{0}/versions/.python-version', github.action_path)) || '' }}
+        python-version: ${{ steps.detect.outputs.python-version }}
+        python-version-file: ${{ steps.detect.outputs.python-version-file }}
         # the linters get their own venvs; don't change the Python seen by the rest of the job
         update-environment: false
 
@@ -180,25 +195,16 @@ runs:
       with:
         cache: ${{ inputs.cache }}
         cache-dependency-path: '**/go.sum'
-        go-version: ${{ inputs.go-version }}
-        go-version-file: ${{ inputs.go-version-file || (inputs.go-version == '' && 'go.mod') || '' }}
-
-    # setup-terraform has no input for reading a version file
-    - name: Resolve Terraform version
-      id: terraform
-      if: contains(fromJSON(steps.detect.outputs.languages), 'terraform')
-      env:
-        LINT_TERRAFORM_VERSION: ${{ inputs.terraform-version }}
-        LINT_TERRAFORM_VERSION_FILE: ${{ inputs.terraform-version-file }}
-      shell: bash
-      run: echo "version=$("${GITHUB_ACTION_PATH}/bin/lint.sh" version terraform)" >>"${GITHUB_OUTPUT}"
+        go-version: ${{ steps.detect.outputs.go-version }}
+        go-version-file: ${{ steps.detect.outputs.go-version-file }}
 
     - name: Set up Terraform
       if: contains(fromJSON(steps.detect.outputs.languages), 'terraform')
       uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e  # v4.0.1
       continue-on-error: true
       with:
-        terraform_version: ${{ steps.terraform.outputs.version }}
+        # setup-terraform has no input for a version file, so this is resolved by bin/lint.sh
+        terraform_version: ${{ steps.detect.outputs.terraform-version }}
         # The stdout wrapper would interfere with reading Terraform's output
         terraform_wrapper: false
 
@@ -245,6 +251,7 @@ runs:
         LINT_ACTIONLINT_VERSION: ${{ inputs.actionlint-version }}
         LINT_ACTIONLINT_VERSION_FILE: ${{ inputs.actionlint-version-file }}
         LINT_CACHE: ${{ runner.tool_cache }}/composite-lint
+        LINT_CONFIG_FILE: ${{ inputs.config-file }}
         LINT_EXCLUDE: ${{ inputs.exclude }}
         LINT_FLAKE8_CONFIG: ${{ inputs.flake8-config }}
         LINT_FLAKE8_VERSION: ${{ inputs.flake8-version }}

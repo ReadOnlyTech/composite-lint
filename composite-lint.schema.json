@@ -1,0 +1,206 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/ReadOnlyTech/composite-lint/main/composite-lint.schema.json",
+  "title": "composite-lint config",
+  "description": "Settings for composite-lint (.composite-lint.yml): the action's inputs, as flat key: value lines. The action's inputs, and bin/lint.sh's options and LINT_* environment variables, take precedence; anything unset uses what's bundled.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "languages": {
+      "description": "Languages to lint, comma- or whitespace-separated. If unset, they're detected from the files present.",
+      "type": "string",
+      "pattern": "^\\s*(actions|docker|go|pre-commit|python|shell|terraform|woke|yaml)(\\s*[,\\s]\\s*(actions|docker|go|pre-commit|python|shell|terraform|woke|yaml))*\\s*$"
+    },
+    "paths": {
+      "description": "Paths to lint, relative to the repo root; comma- or whitespace-separated. Defaults to the repo root.",
+      "type": "string"
+    },
+    "exclude": {
+      "description": "Git pathspecs to exclude, relative to the repo root; comma- or whitespace-separated.",
+      "type": "string"
+    },
+    "go-version": {
+      "description": "Go version; set at most one of this and go-version-file.",
+      "type": [
+        "string",
+        "number"
+      ]
+    },
+    "go-version-file": {
+      "description": "File containing the Go version, e.g. go.mod (the default), relative to the repo root.",
+      "type": "string"
+    },
+    "python-version": {
+      "description": "Python version used to run the Python-based linters; set at most one of this and python-version-file.",
+      "type": [
+        "string",
+        "number"
+      ]
+    },
+    "python-version-file": {
+      "description": "File containing the Python version, relative to the repo root.",
+      "type": "string"
+    },
+    "terraform-version": {
+      "description": "Terraform version; set at most one of this and terraform-version-file.",
+      "type": [
+        "string",
+        "number"
+      ]
+    },
+    "terraform-version-file": {
+      "description": "File containing the Terraform version, relative to the repo root.",
+      "type": "string"
+    },
+    "actionlint-config": {
+      "description": "actionlint config file, relative to the repo root.",
+      "type": "string"
+    },
+    "actionlint-version": {
+      "description": "actionlint version; set at most one of this and actionlint-version-file.",
+      "type": [
+        "string",
+        "number"
+      ]
+    },
+    "actionlint-version-file": {
+      "description": "File containing the actionlint version, relative to the repo root.",
+      "type": "string"
+    },
+    "flake8-config": {
+      "description": "flake8 config file, relative to the repo root.",
+      "type": "string"
+    },
+    "flake8-version": {
+      "description": "flake8 version; set at most one of this and flake8-version-file.",
+      "type": [
+        "string",
+        "number"
+      ]
+    },
+    "flake8-version-file": {
+      "description": "File containing the flake8 version, relative to the repo root.",
+      "type": "string"
+    },
+    "golangci-lint-config": {
+      "description": "golangci-lint config file, relative to the repo root.",
+      "type": "string"
+    },
+    "golangci-lint-version": {
+      "description": "golangci-lint version; set at most one of this and golangci-lint-version-file.",
+      "type": [
+        "string",
+        "number"
+      ]
+    },
+    "golangci-lint-version-file": {
+      "description": "File containing the golangci-lint version, relative to the repo root.",
+      "type": "string"
+    },
+    "hadolint-config": {
+      "description": "hadolint config file, relative to the repo root.",
+      "type": "string"
+    },
+    "hadolint-version": {
+      "description": "hadolint version; set at most one of this and hadolint-version-file.",
+      "type": [
+        "string",
+        "number"
+      ]
+    },
+    "hadolint-version-file": {
+      "description": "File containing the hadolint version, relative to the repo root.",
+      "type": "string"
+    },
+    "pre-commit-config": {
+      "description": "pre-commit config file (by default, the bundled one runs detect-private-key and check-symlinks), relative to the repo root.",
+      "type": "string"
+    },
+    "pre-commit-version": {
+      "description": "pre-commit version; set at most one of this and pre-commit-version-file.",
+      "type": [
+        "string",
+        "number"
+      ]
+    },
+    "pre-commit-version-file": {
+      "description": "File containing the pre-commit version, relative to the repo root.",
+      "type": "string"
+    },
+    "shellcheck-config": {
+      "description": "ShellCheck config file (an rcfile), relative to the repo root.",
+      "type": "string"
+    },
+    "shellcheck-version": {
+      "description": "ShellCheck version; set at most one of this and shellcheck-version-file.",
+      "type": [
+        "string",
+        "number"
+      ]
+    },
+    "shellcheck-version-file": {
+      "description": "File containing the ShellCheck version, relative to the repo root.",
+      "type": "string"
+    },
+    "tflint-config": {
+      "description": "TFLint config file, relative to the repo root.",
+      "type": "string"
+    },
+    "tflint-version": {
+      "description": "TFLint version; set at most one of this and tflint-version-file.",
+      "type": [
+        "string",
+        "number"
+      ]
+    },
+    "tflint-version-file": {
+      "description": "File containing the TFLint version, relative to the repo root.",
+      "type": "string"
+    },
+    "woke-config": {
+      "description": "woke config file, relative to the repo root.",
+      "type": "string"
+    },
+    "woke-version": {
+      "description": "woke version; set at most one of this and woke-version-file.",
+      "type": [
+        "string",
+        "number"
+      ]
+    },
+    "woke-version-file": {
+      "description": "File containing the woke version, relative to the repo root.",
+      "type": "string"
+    },
+    "yamllint-config": {
+      "description": "yamllint config file, relative to the repo root.",
+      "type": "string"
+    },
+    "yamllint-version": {
+      "description": "yamllint version; set at most one of this and yamllint-version-file.",
+      "type": [
+        "string",
+        "number"
+      ]
+    },
+    "yamllint-version-file": {
+      "description": "File containing the yamllint version, relative to the repo root.",
+      "type": "string"
+    },
+    "zizmor-config": {
+      "description": "zizmor config file, relative to the repo root.",
+      "type": "string"
+    },
+    "zizmor-version": {
+      "description": "zizmor version; set at most one of this and zizmor-version-file.",
+      "type": [
+        "string",
+        "number"
+      ]
+    },
+    "zizmor-version-file": {
+      "description": "File containing the zizmor version, relative to the repo root.",
+      "type": "string"
+    }
+  }
+}

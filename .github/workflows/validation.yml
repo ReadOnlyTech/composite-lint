@@ -28,11 +28,9 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Lint repo, minus intentionally failing test
+      # settings, like excluding the intentionally failing tests, are in .composite-lint.yml
+      - name: Lint repo
         uses: $/
-        with:
-          exclude: tests/fail
-          go-version-file: tests/pass/go/go.mod
 
       - name: Run test fixtures
         if: ${{ !cancelled() }}

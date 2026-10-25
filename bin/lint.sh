@@ -2,19 +2,28 @@
 #
 # Detects which languages are present, installs pinned linters for them, and runs them.
 #
-# Usage:
-#   lint [run]   [--install] [--languages a,b] [--exclude pathspec]... [path...]   # --install: install first
-#   lint detect  [--languages a,b] [--exclude pathspec]... [path...]
-#   lint install [--languages a,b] [--exclude pathspec]... [path...]
-#   lint versions [--languages a,b] [--exclude pathspec]... [path...]   # each needed tool and its version
-#   lint version <tool>
+# Usage: lint <command> [options] [path...]
 #
-# Options can also come from LINT_LANGUAGES, LINT_EXCLUDE and LINT_PATHS (whitespace-separated).
-# Per-tool settings come from the environment, e.g. for golangci-lint:
-#   LINT_GOLANGCI_LINT_VERSION       raw version, e.g. v2.14.0 (the `v` is optional)
-#   LINT_GOLANGCI_LINT_VERSION_FILE  path to a file containing the version
-#   LINT_GOLANGCI_LINT_CONFIG        path to a config file
-# Anything not set falls back to what's bundled in versions/ and configs/.
+# Commands:
+#   r, run       lint
+#   d, detect    print the languages to lint, as JSON
+#   i, install   install the linters the languages need
+#   v, versions  print each tool's version (and the runtimes' settings, for the action)
+#
+# Options:
+#   -c, --config-file FILE   settings file (default: .composite-lint.yml in the repo root, if present)
+#   -i, --install            with run: install first
+#   -l, --languages a,b      languages to lint, instead of detecting them
+#   -x, --exclude PATHSPEC   exclude files (repeatable, or comma-separated)
+#   -h, --help
+#
+# Paths default to the config's `paths`, or `.`. When both are given, only paths within the config's are linted
+# (e.g. for pre-commit, which passes every changed file).
+#
+# Settings come from, in order of precedence: options; environment variables (as the action passes its inputs); the
+# config file; and finally what's bundled in versions/ and configs/. The config file takes the action's input names
+# as flat `key: value` lines, e.g. `shellcheck-version: 0.10.0`, with paths relative to the repo root; the matching
+# environment variable is LINT_ plus the name in capitals with underscores, e.g. LINT_SHELLCHECK_VERSION.
 #
 # All inputs are validated before anything is installed or run. After that, a language whose tools
 # can't be installed or found fails on its own and the other languages still run.
@@ -158,6 +167,62 @@ config() {
   elif [[ -n ${bundled} ]]; then
     echo "${ROOT}/configs/${bundled}"
   fi
+}
+
+# Every key the config file accepts: the action's inputs, minus the ones only it uses (cache, config-file, github-token)
+config_keys() {
+  local tool
+  echo languages paths exclude
+  for tool in go python terraform; do
+    echo "${tool}-version ${tool}-version-file"
+  done
+  for tool in actionlint flake8 golangci-lint hadolint pre-commit shellcheck tflint woke yamllint zizmor; do
+    echo "${tool}-config ${tool}-version ${tool}-version-file"
+  done
+}
+
+# Sets each setting in the config file that isn't already set in the environment. Its paths are relative to the repo
+# root, so they're made absolute (and paths/exclude become git pathspecs from the root).
+load_config() {
+  local keys top line key value var items item pathspecs
+  keys=" $(config_keys | tr '\n' ' ') "
+  top=$(git rev-parse --show-toplevel)
+  readonly keys top
+
+  while IFS= read -r line || [[ -n ${line} ]]; do
+    line=$(trim "${line%%#*}")
+    if [[ -z ${line} || ${line} == --- ]]; then
+      continue
+    fi
+    [[ ${line} =~ ^([a-z0-9-]+):[[:space:]]*(.*)$ ]] || die "${1}: expected flat 'key: value' lines, not '${line}'"
+    key=${BASH_REMATCH[1]}
+    value=${BASH_REMATCH[2]}
+    [[ ${keys} == *" ${key} "* ]] || die "${1}: unknown key '${key}'"
+    if [[ ${value} =~ ^\"(.*)\"$ || ${value} =~ ^\'(.*)\'$ ]]; then
+      value=${BASH_REMATCH[1]}
+    fi
+
+    var=$(env_key "${key}")
+    if [[ -n ${!var:-} ]]; then
+      continue
+    fi
+    case ${key} in
+      paths | exclude)
+        split items "${value}"
+        pathspecs=()
+        for item in "${items[@]}"; do
+          pathspecs+=(":(top)${item}")
+        done
+        value=${pathspecs[*]}
+        ;;
+      *-config | *-version-file)
+        if [[ ${value} != /* ]]; then
+          value=${top}/${value}
+        fi
+        ;;
+    esac
+    printf -v "${var}" '%s' "${value}"
+  done <"${1}"
 }
 
 # --- tool installation ---
@@ -369,30 +434,79 @@ validate_inputs() {
     version "${tool}" >/dev/null
     config "${tool}" >/dev/null
   done
+  runtime_setting go '' >/dev/null
+  runtime_setting python '' >/dev/null
+  if is_selected terraform; then
+    version terraform >/dev/null
+  fi
+}
+
+is_selected() {
+  [[ " ${SELECTED[*]} " == *" ${1} "* ]]
+}
+
+# A runtime's version setting, for the action's setup-<runtime> step: its version or its version file
+runtime_setting() {
+  local key raw file
+  key=$(env_key "${1}")
+  raw=${key}_VERSION
+  raw=${!raw:-}
+  file=${key}_VERSION_FILE
+  file=${!file:-}
+  readonly key raw file
+  if [[ -n ${raw} && -n ${file} ]]; then
+    die "set only one of ${key}_VERSION and ${key}_VERSION_FILE"
+  elif [[ -n ${raw} ]]; then
+    echo "${1}-version ${raw}"
+  else
+    echo "${1}-version-file ${file:-${2}}"
+  fi
 }
 
 print_versions() {
-  local tool
+  local tool python=false
   for tool in $(selected_tools); do
     echo "${tool} $(version "${tool}")"
     # these configs pin the versions of what the tools install (TFLint's ruleset, pre-commit's hooks)
     case ${tool} in
-      pre-commit | tflint) echo "${tool} config $(cksum <"$(config "${tool}")")" ;;
+      pre-commit | tflint) echo "${tool}-config $(cksum <"$(config "${tool}")")" ;;
     esac
+    if is_pip "${tool}"; then
+      python=true
+    fi
   done
+  readonly python
+
+  if [[ ${python} == true ]]; then
+    runtime_setting python "${ROOT}/versions/.python-version"
+  fi
+  if is_selected go; then
+    runtime_setting go go.mod
+  fi
+  if is_selected terraform; then
+    echo "terraform-version $(version terraform)"
+  fi
 }
 
 # --- file discovery and language detection ---
 
 collect_files() {
-  local spec=("${PATHS[@]}") p f list
+  local excludes=() p f list
   for p in "${EXCLUDES[@]}"; do
-    spec+=(":(exclude)${p}")
+    # combined with any magic it already has, e.g. the config's :(top)
+    if [[ ${p} == ':('* ]]; then
+      excludes+=(":(exclude,${p#:(}")
+    else
+      excludes+=(":(exclude)${p}")
+    fi
   done
-  readonly spec
+  readonly excludes
 
-  git rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "not inside a git repository"
-  list=$(git ls-files -co --exclude-standard -- "${spec[@]}") || die "couldn't list files"
+  list=$(git ls-files -co --exclude-standard -- "${PATHS[@]}" "${excludes[@]}") || die "couldn't list files"
+  # given paths only count within the configured ones
+  if ((${#SCOPE[@]})); then
+    list=$(comm -12 <(sort <<<"${list}") <(git ls-files -co --exclude-standard -- "${SCOPE[@]}" | sort))
+  fi
   readonly list
   FILES=()
   while IFS= read -r f; do
@@ -485,7 +599,8 @@ print_json() {
 # passes every file, which zizmor rejects unless it's YAML) and there are no excludes, which they wouldn't know about
 self_discovery() {
   local p
-  if ((${#EXCLUDES[@]})); then
+  # excludes and a configured scope are both things they wouldn't know about
+  if ((${#EXCLUDES[@]} || ${#SCOPE[@]})); then
     return 1
   fi
   for p in "${PATHS[@]}"; do
@@ -725,55 +840,95 @@ if [[ ${LINT_NESTED:-} == true ]]; then
   exit 0
 fi
 
-cmd=run
-case ${1:-} in
-  detect | install | run | version | versions)
-    cmd=${1}
-    shift
+if ! ((${#})); then
+  usage 2
+fi
+case ${1} in
+  r | run) cmd=run ;;
+  d | detect) cmd=detect ;;
+  i | install) cmd=install ;;
+  v | versions) cmd=versions ;;
+  -h | --help) usage ;;
+  *)
+    echo "lint: unknown command ${1}" >&2
+    usage 2
     ;;
 esac
 readonly cmd
+shift
 
-if [[ ${cmd} == version ]]; then
-  [[ ${#} -eq 1 ]] || usage 2
-  version "${1}"
-  exit
-fi
-
-# also accepts detect's JSON output
-LINT_LANGUAGES=${LINT_LANGUAGES:-}
-readonly LINT_LANGUAGES
-split LANGS "${LINT_LANGUAGES//[\[\]\"]/}"
-split EXCLUDES "${LINT_EXCLUDE:-}"
-split PATHS "${LINT_PATHS:-}"
 install=false
+config_file=${LINT_CONFIG_FILE:-}
+cli_languages=''
+cli_excludes=()
+cli_paths=()
 while ((${#})); do
   case ${1} in
-    --install)
+    -c | --config-file)
+      config_file=${2:?${1} needs a value}
+      shift 2
+      ;;
+    -i | --install)
       install=true
       shift
       ;;
-    --languages)
-      split LANGS "${2:?--languages needs a value}"
+    -l | --languages)
+      cli_languages=${2:?${1} needs a value}
       shift 2
       ;;
-    --exclude)
-      EXCLUDES+=("${2:?--exclude needs a value}")
+    -x | --exclude)
+      cli_excludes+=("${2:?${1} needs a value}")
       shift 2
       ;;
     -h | --help) usage ;;
     -*) die "unknown option ${1}" ;;
     *)
-      PATHS+=("${1}")
+      cli_paths+=("${1}")
       shift
       ;;
   esac
 done
-readonly install LANGS EXCLUDES
+if [[ ${install} == true && ${cmd} != run ]]; then
+  die "--install only applies to run"
+fi
+
+git rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "not inside a git repository"
+if [[ -z ${config_file} && -f $(git rev-parse --show-toplevel)/.composite-lint.yml ]]; then
+  config_file=$(git rev-parse --show-toplevel)/.composite-lint.yml
+fi
+if [[ -n ${config_file} ]]; then
+  # -r rather than -f, so e.g. /dev/null can stand in for "no config"
+  [[ -r ${config_file} ]] || die "config file ${config_file} not found"
+  load_config "${config_file}"
+fi
+readonly install config_file cli_languages cli_excludes cli_paths
+
+# options win over the environment and the config; LINT_LANGUAGES also accepts detect's JSON output
+if [[ -n ${cli_languages} ]]; then
+  split LANGS "${cli_languages}"
+else
+  LINT_LANGUAGES=${LINT_LANGUAGES:-}
+  split LANGS "${LINT_LANGUAGES//[\[\]\"]/}"
+fi
+# excludes add up, rather than options replacing the config's
+split EXCLUDES "${LINT_EXCLUDE:-}"
+more=()
+for exclude in "${cli_excludes[@]}"; do
+  split more "${exclude}"
+  EXCLUDES+=("${more[@]}")
+done
+# given paths are linted only within the configured ones (see collect_files)
+split SCOPE "${LINT_PATHS:-}"
+if ((${#cli_paths[@]})); then
+  PATHS=("${cli_paths[@]}")
+else
+  PATHS=("${SCOPE[@]}")
+  SCOPE=()
+fi
 if ! ((${#PATHS[@]})); then
   PATHS=(.)
 fi
-readonly PATHS
+readonly LANGS EXCLUDES SCOPE PATHS
 
 collect_files
 select_languages

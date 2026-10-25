@@ -7,7 +7,7 @@
 - id: composite-lint
   name: composite-lint
   description: Opinionated all-in-one linting
-  entry: bin/lint.sh --install
+  entry: bin/lint.sh run --install
   language: script
   # One run over every file, rather than parallel batches that would each
   # install and detect separately
