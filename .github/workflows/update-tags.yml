@@ -16,7 +16,7 @@ permissions: {}
 
 jobs:
   tags:
-    name: Update floating tags
+    name: Update Floating Tags
     runs-on: ubuntu-latest
     if: ${{ !github.event.release.prerelease }}
     permissions:
@@ -30,8 +30,10 @@ jobs:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
           REPO: ${{ github.repository }}
           SHA: ${{ github.sha }}
-        shell: bash
         run: |
+          # without shell: bash, pipefail is off, which would let a failed `gh api` look like "not the newest"
+          set -o pipefail
+
           if [[ ! ${RELEASE_TAG} =~ ^v([0-9]+)\.([0-9]+)\.[0-9]+$ ]]; then
             echo "${RELEASE_TAG} isn't a full vX.Y.Z release; leaving the floating tags alone"
             exit

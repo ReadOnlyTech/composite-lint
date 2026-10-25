@@ -1,0 +1,88 @@
+# yamllint disable rule:line-length
+---
+
+name: Update Tool Versions
+
+on:  # yamllint disable-line rule:truthy
+  schedule:
+    - cron: '30 3 * * 1'  # Every Monday at 03:30 UTC
+  workflow_dispatch:
+    inputs:
+      tools:
+        description: Comma-separated tools to update, or blank for all (e.g. terraform,tflint; `.github/scripts/bump_tool_versions.py --help` lists them all)
+        type: string
+        required: false
+        default: ''
+
+concurrency:
+  cancel-in-progress: true
+  group: ${{ github.workflow }}
+
+permissions: {}
+
+jobs:
+  update:
+    name: Update Tool Versions
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write  # to run validation on the PR, which GITHUB_TOKEN's events don't trigger by themselves
+      contents: write  # to push the update branch
+      pull-requests: write  # to open the PR
+    env:
+      BASE_BRANCH: ${{ github.event.repository.default_branch }}
+      GH_TOKEN: ${{ github.token }}
+      PR_BRANCH: auto-update-tool-versions
+    steps:
+      # The PR targets the default branch, so it's what gets updated, even when this is run from another branch
+      - name: Check out repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ env.BASE_BRANCH }}
+
+      # Minor and patch versions only; major versions need assessment, so are left to be done manually
+      - name: Update tool versions
+        env:
+          # Blank (and on scheduled runs) means all tools
+          TOOLS: ${{ inputs.tools }}
+        run: |
+          # Split on commas and/or spaces; tool names never contain spaces
+          read -ra tools <<<"${TOOLS//,/ }"
+          readonly tools
+          .github/scripts/bump_tool_versions.py "${tools[@]}" >"${RUNNER_TEMP}/updated.txt"
+          cat "${RUNNER_TEMP}/updated.txt"
+
+      - name: Open PR, closing any previous one
+        run: |
+          if [[ -z "$(git status --porcelain)" ]]; then
+            echo "No updates."
+            exit 0
+          fi
+
+          {
+            echo '## Version updates (minor and patch only)'
+            echo '```'
+            cat "${RUNNER_TEMP}/updated.txt"
+            echo '```'
+          } >"${RUNNER_TEMP}/body.md"
+
+          for pr in $(gh pr list --head "${PR_BRANCH}" --state open --json number --jq '.[].number'); do
+            gh pr close "${pr}" --comment 'Superseded by a newer run.' --delete-branch
+          done
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          # Checkout doesn't persist credentials, so authenticate the push with GH_TOKEN via gh
+          gh auth setup-git
+          git checkout -b "${PR_BRANCH}"
+          git commit -am 'chore: update tool versions'
+          git push --force origin "${PR_BRANCH}"
+          gh pr create \
+            --title 'chore: update tool versions' \
+            --body-file "${RUNNER_TEMP}/body.md" \
+            --head "${PR_BRANCH}" \
+            --base "${BASE_BRANCH}"
+
+          # Events caused by GITHUB_TOKEN don't start workflows (pull_request_target included), but dispatching one is
+          # allowed; its checks land on the PR's head commit, so they show on the PR
+          # gh workflow run validation.yml --ref "${PR_BRANCH}"
