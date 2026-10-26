@@ -41,6 +41,15 @@ PIP_TOOLS=' flake8 pre-commit yamllint zizmor '
 CACHE=${LINT_CACHE:-${RUNNER_TOOL_CACHE:-${XDG_CACHE_HOME:-${HOME}/.cache}}/composite-lint}
 readonly ROOT LANGUAGES PIP_TOOLS CACHE
 
+# setup-python's builds load libpython from their own lib dir, which setup-python only adds to the loader's path when
+# it updates the environment, which the action has it not do. GitHub-hosted runners have it configured anyway; other
+# runners don't, so without this the Python (and the venvs made from it) can't even start.
+if [[ -n ${LINT_PYTHON:-} ]]; then
+  LD_LIBRARY_PATH=$(dirname "$(dirname "${LINT_PYTHON}")")/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+  readonly LD_LIBRARY_PATH
+  export LD_LIBRARY_PATH
+fi
+
 die() {
   local message=${*}
   readonly message
