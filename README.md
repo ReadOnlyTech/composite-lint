@@ -37,6 +37,11 @@ with `<tool>-version` or `<tool>-version-file`, and its config with
 and [`configs/`](configs). As a general rule, these default versions are
 "latest stable" and the default configs are "very strict".
 
+Without a version input, each tool uses the repo's own `.<tool>-version` file if
+it has one in its root (like `.python-version` or `.terraform-version`, and
+named as in [`versions/`](versions)), before the bundled version. For Go, the
+repo's `go.mod` comes first.
+
 Without a `<tool>-config`, a linter uses the repo's own config if it has one in
 its root, found the way that linter would: `.github/actionlint.y[a]ml`,
 `.flake8` (or `setup.cfg`/`tox.ini` with a `[flake8]` section),
@@ -47,6 +52,20 @@ its root, found the way that linter would: `.github/actionlint.y[a]ml`,
 The linters, Go's module/build caches, golangci-lint's analysis cache, and
 Terraform providers are kept in the Actions cache, and count toward your repo's
 cache quota. Set `cache: false` to turn that off.
+
+### Which Files
+
+By default, only the files git tracks (or would, i.e. those it doesn't ignore)
+are linted. With `include-ignored: true`, the files git ignores are too, like
+`ls`, and adding `include-hidden: true` includes hidden ones, like `ls -a`.
+Hidden files git doesn't ignore, like `.github/`, are always linted, so
+`include-hidden` without `include-ignored` is an error. These
+are best used before anything like a build or an install leaves artifacts
+around, unless you're prepared to `exclude` them all.
+
+`exclude` takes paths or glob patterns, where `*` matches within a directory and
+`**` across them, and anything matched excludes everything under it. It
+defaults to `.git **/node_modules`; setting it replaces those.
 
 ### Config File
 

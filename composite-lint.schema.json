@@ -16,8 +16,16 @@
       "type": "string"
     },
     "exclude": {
-      "description": "Git pathspecs to exclude, relative to the repo root; comma- or whitespace-separated.",
+      "description": "Paths or glob patterns to exclude, relative to the repo root; comma- or whitespace-separated. In a pattern, `*` matches within a directory and `**` across them; anything matched excludes everything under it. Defaults to `.git **/node_modules`; setting this replaces those.",
       "type": "string"
+    },
+    "include-hidden": {
+      "description": "With include-ignored (and an error without it), whether the files git ignores also include hidden ones (any part of the path starting with `.`), like `ls -a` rather than `ls`. Hidden files git doesn't ignore are always linted. Defaults to false.",
+      "type": "boolean"
+    },
+    "include-ignored": {
+      "description": "Whether to also lint the files git ignores, like `ls`; see include-hidden. Otherwise, only the files git tracks, or would (those it doesn't ignore), are linted. Defaults to false.",
+      "type": "boolean"
     },
     "go-version": {
       "description": "Go version; set at most one of this and go-version-file.",
@@ -27,7 +35,7 @@
       ]
     },
     "go-version-file": {
-      "description": "File containing the Go version, e.g. go.mod (the default), relative to the repo root.",
+      "description": "File containing the Go version, relative to the repo root. Defaults to the repo root's go.mod, else its .go-version, if present.",
       "type": "string"
     },
     "python-version": {
@@ -38,7 +46,7 @@
       ]
     },
     "python-version-file": {
-      "description": "File containing the Python version, relative to the repo root.",
+      "description": "File containing the Python version, relative to the repo root. Defaults to the repo root's .python-version, if present.",
       "type": "string"
     },
     "terraform-version": {
@@ -49,7 +57,7 @@
       ]
     },
     "terraform-version-file": {
-      "description": "File containing the Terraform version, relative to the repo root.",
+      "description": "File containing the Terraform version, relative to the repo root. Defaults to the repo root's .terraform-version, if present.",
       "type": "string"
     },
     "actionlint-config": {
@@ -64,7 +72,7 @@
       ]
     },
     "actionlint-version-file": {
-      "description": "File containing the actionlint version, relative to the repo root.",
+      "description": "File containing the actionlint version, relative to the repo root. Defaults to the repo root's .actionlint-version, if present.",
       "type": "string"
     },
     "flake8-config": {
@@ -79,7 +87,7 @@
       ]
     },
     "flake8-version-file": {
-      "description": "File containing the flake8 version, relative to the repo root.",
+      "description": "File containing the flake8 version, relative to the repo root. Defaults to the repo root's .flake8-version, if present.",
       "type": "string"
     },
     "golangci-lint-config": {
@@ -94,7 +102,7 @@
       ]
     },
     "golangci-lint-version-file": {
-      "description": "File containing the golangci-lint version, relative to the repo root.",
+      "description": "File containing the golangci-lint version, relative to the repo root. Defaults to the repo root's .golangci-lint-version, if present.",
       "type": "string"
     },
     "hadolint-config": {
@@ -109,7 +117,7 @@
       ]
     },
     "hadolint-version-file": {
-      "description": "File containing the hadolint version, relative to the repo root.",
+      "description": "File containing the hadolint version, relative to the repo root. Defaults to the repo root's .hadolint-version, if present.",
       "type": "string"
     },
     "pre-commit-config": {
@@ -124,7 +132,7 @@
       ]
     },
     "pre-commit-version-file": {
-      "description": "File containing the pre-commit version, relative to the repo root.",
+      "description": "File containing the pre-commit version, relative to the repo root. Defaults to the repo root's .pre-commit-version, if present.",
       "type": "string"
     },
     "shellcheck-config": {
@@ -139,7 +147,7 @@
       ]
     },
     "shellcheck-version-file": {
-      "description": "File containing the ShellCheck version, relative to the repo root.",
+      "description": "File containing the ShellCheck version, relative to the repo root. Defaults to the repo root's .shellcheck-version, if present.",
       "type": "string"
     },
     "tflint-config": {
@@ -154,7 +162,7 @@
       ]
     },
     "tflint-version-file": {
-      "description": "File containing the TFLint version, relative to the repo root.",
+      "description": "File containing the TFLint version, relative to the repo root. Defaults to the repo root's .tflint-version, if present.",
       "type": "string"
     },
     "woke-config": {
@@ -169,7 +177,7 @@
       ]
     },
     "woke-version-file": {
-      "description": "File containing the woke version, relative to the repo root.",
+      "description": "File containing the woke version, relative to the repo root. Defaults to the repo root's .woke-version, if present.",
       "type": "string"
     },
     "yamllint-config": {
@@ -184,7 +192,7 @@
       ]
     },
     "yamllint-version-file": {
-      "description": "File containing the yamllint version, relative to the repo root.",
+      "description": "File containing the yamllint version, relative to the repo root. Defaults to the repo root's .yamllint-version, if present.",
       "type": "string"
     },
     "zizmor-config": {
@@ -199,7 +207,7 @@
       ]
     },
     "zizmor-version-file": {
-      "description": "File containing the zizmor version, relative to the repo root.",
+      "description": "File containing the zizmor version, relative to the repo root. Defaults to the repo root's .zizmor-version, if present.",
       "type": "string"
     }
   }
