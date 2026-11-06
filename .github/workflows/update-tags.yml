@@ -101,20 +101,27 @@ jobs:
           persist-credentials: false
           ref: ${{ env.BASE_BRANCH }}
 
-      # The examples use this release's tag (releases are immutable) and the bundled pre-commit-hooks rev, which is a
-      # commit hash with a `# frozen: vX.Y.Z` comment (its releases aren't immutable). The default branch only takes
-      # changes through PRs, so this opens one.
+      # The examples use the newest release's tag (releases are immutable) and the bundled pre-commit-hooks rev, which
+      # is a commit hash with a `# frozen: vX.Y.Z` comment (its releases aren't immutable). The default branch only
+      # takes changes through PRs, so this opens one.
       - name: Open README update PR as needed
         env:
           GH_TOKEN: ${{ github.token }}
           PR_BRANCH: auto-update-readme
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          REPO: ${{ github.repository }}
         run: |
+          # without shell: bash, pipefail is off, which would let a failed `gh api` give an empty tag
+          set -o pipefail
+
+          # The newest full release: this one when it moved latest, and still found on manual runs, which have no
+          # release. The API lists tags alphabetically, so v0.0.10 would come before v0.0.2 without sort -V.
+          release_tag="$(gh api --paginate "repos/${REPO}/git/matching-refs/tags/v" --jq '.[].ref | ltrimstr("refs/tags/")' |
+            grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)"
           hooks_rev="$(sed -nE 's/^\s*rev:\s*(.+)$/\1/p' configs/pre-commit.yaml)"
-          readonly hooks_rev
+          readonly release_tag hooks_rev
           sed -Ei \
-            -e "s|(uses: ReadOnlyTech/composite-lint@).*|\1${RELEASE_TAG}|" \
-            -e "\|repo: https://github.com/ReadOnlyTech/composite-lint$|{n;s|(rev: ).*|\1${RELEASE_TAG}|}" \
+            -e "s|(uses: ReadOnlyTech/composite-lint@).*|\1${release_tag}|" \
+            -e "\|repo: https://github.com/ReadOnlyTech/composite-lint$|{n;s|(rev: ).*|\1${release_tag}|}" \
             -e "\|repo: https://github.com/pre-commit/pre-commit-hooks$|{n;s|(rev: ).*|\1${hooks_rev}|}" \
             README.md
           if git diff --quiet; then
@@ -131,11 +138,11 @@ jobs:
           # Checkout doesn't persist credentials, so authenticate the push with GH_TOKEN via gh
           gh auth setup-git
           git checkout -b "${PR_BRANCH}"
-          git commit -am "docs: use ${RELEASE_TAG} in the README examples"
+          git commit -am "docs: use ${release_tag} in the README examples"
           git push --force origin "${PR_BRANCH}"
           gh pr create \
-            --title "docs: use ${RELEASE_TAG} in the README examples" \
-            --body "Points the README examples at ${RELEASE_TAG}, the latest release." \
+            --title "docs: use ${release_tag} in the README examples" \
+            --body "Points the README examples at ${release_tag}, the latest release." \
             --head "${PR_BRANCH}" \
             --base "${BASE_BRANCH}"
 
