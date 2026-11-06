@@ -7,6 +7,7 @@ on:  # yamllint disable-line rule:truthy
   release:
     types:
       - published
+  workflow_dispatch:
 
 concurrency:
   cancel-in-progress: false
@@ -30,7 +31,7 @@ jobs:
         id: tags
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || 'latest' }}
           REPO: ${{ github.repository }}
           SHA: ${{ github.sha }}
         run: |
@@ -38,6 +39,10 @@ jobs:
           set -o pipefail
 
           if [[ ! ${RELEASE_TAG} =~ ^v([0-9]+)\.([0-9]+)\.[0-9]+$ ]]; then
+            if [[ "${RELEASE_TAG}" == 'latest' ]]; then
+              echo 'latest=true' >>"${GITHUB_OUTPUT}"
+            fi
+
             echo "${RELEASE_TAG} isn't a full vX.Y.Z release; leaving the floating tags alone"
             exit
           fi
