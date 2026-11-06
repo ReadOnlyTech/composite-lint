@@ -90,6 +90,8 @@ for tag in latest "${new_major}" "${new_minor}"; do
   if is_newer "${version}" "${newest}"; then
     git tag -f "${tag}"
     git push -q --force origin "refs/tags/${tag}"
+    # Tags pushed in the same second look equally new, so `pre-commit autoupdate` can pick a floating one
+    sleep "${TAG_RELEASE_PUSH_DELAY:-2}"
   else
     echo "Leaving ${tag} at ${newest}, which is newer"
   fi

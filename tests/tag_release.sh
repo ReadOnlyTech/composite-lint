@@ -17,6 +17,8 @@ failures=0
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
 export GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@example.com
 export GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@example.com
+# The script waits between tag pushes, which only matters for real releases
+export TAG_RELEASE_PUSH_DELAY=0
 
 fail() {
   local message="${*}"
