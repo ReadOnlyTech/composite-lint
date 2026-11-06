@@ -85,7 +85,8 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ needs.tags.outputs.latest == 'true' }}
     permissions:
-      contents: write  # to push the README change
+      contents: write  # to push the update branch
+      pull-requests: write  # to open the PR
     env:
       BASE_BRANCH: ${{ github.event.repository.default_branch }}
     steps:
@@ -96,10 +97,12 @@ jobs:
           ref: ${{ env.BASE_BRANCH }}
 
       # The examples use this release's tag (releases are immutable) and the bundled pre-commit-hooks rev, which is a
-      # commit hash with a `# frozen: vX.Y.Z` comment (its releases aren't immutable)
-      - name: Point the README examples at this release
+      # commit hash with a `# frozen: vX.Y.Z` comment (its releases aren't immutable). The default branch only takes
+      # changes through PRs, so this opens one.
+      - name: Open README update PR as needed
         env:
           GH_TOKEN: ${{ github.token }}
+          PR_BRANCH: auto-update-readme
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           hooks_rev="$(sed -nE 's/^\s*rev:\s*(.+)$/\1/p' configs/pre-commit.yaml)"
@@ -114,9 +117,22 @@ jobs:
             exit
           fi
 
+          for pr in $(gh pr list --head "${PR_BRANCH}" --state open --json number --jq '.[].number'); do
+            gh pr close "${pr}" --comment 'Superseded by a newer release.' --delete-branch
+          done
+
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           # Checkout doesn't persist credentials, so authenticate the push with GH_TOKEN via gh
           gh auth setup-git
+          git checkout -b "${PR_BRANCH}"
           git commit -am "docs: use ${RELEASE_TAG} in the README examples"
-          git push origin "HEAD:${BASE_BRANCH}"
+          git push --force origin "${PR_BRANCH}"
+          gh pr create \
+            --title "docs: use ${RELEASE_TAG} in the README examples" \
+            --body "Points the README examples at ${RELEASE_TAG}, the latest release." \
+            --head "${PR_BRANCH}" \
+            --base "${BASE_BRANCH}"
+
+          # Events caused by GITHUB_TOKEN don't start workflows (pull_request_target included),
+          # so the validation workflow will have to be manually approved on that PR!
