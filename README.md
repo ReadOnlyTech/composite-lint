@@ -15,10 +15,10 @@ We test the action only on Linux runners, both GitHub-hosted and self-hosted.
     persist-credentials: false
 
 - name: Run linting (strict, autodetect)
-  uses: ReadOnlyTech/composite-lint@v0
+  uses: ReadOnlyTech/composite-lint@v0.0.7
 
 - name: Run linting (custom)
-  uses: ReadOnlyTech/composite-lint@v0
+  uses: ReadOnlyTech/composite-lint@v0.0.7
   with:
     cache: false
     paths: src
@@ -29,6 +29,10 @@ We test the action only on Linux runners, both GitHub-hosted and self-hosted.
     shellcheck-config: .shellcheckrc
     shellcheck-version: 0.9.0
 ```
+
+The examples use the tag of the latest release. The releases of this action are
+immutable, so this tag cannot change. A floating tag like `v0` can change. Each
+release updates these examples.
 
 The action installs only the tools that the selected `languages` need. If you
 do not set `languages`, the action finds them from the files in the repo.
@@ -199,17 +203,36 @@ options, and details, run `bin/lint.sh --help`.
 
 ### With pre-commit
 
+This is the recommended `.pre-commit-config.yaml`:
+
 ```yaml
+---
+
 repos:
   - repo: https://github.com/ReadOnlyTech/composite-lint
-    rev: vX.Y.Z  # an exact release; pre-commit warns about floating tags like v0
+    rev: v0.0.7
     hooks:
       - id: composite-lint
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-symlinks
+      - id: detect-private-key
 ```
 
 The hook installs the pinned tools when they are necessary. It lints the files
 that pre-commit gives it, in the same way as the action. It also reads the
 config file.
+
+The second repo contains the hooks of the bundled
+[`configs/pre-commit.yaml`](configs/pre-commit.yaml). Your
+`.pre-commit-config.yaml` replaces the bundled file, so it must contain these
+hooks too. The pre-commit check of the action then runs them. It skips the
+`composite-lint` hook. When pre-commit runs the `composite-lint` hook from
+this file, composite-lint does not do its pre-commit check, because pre-commit
+runs the other hooks itself.
+
+To update the revs, run `pre-commit autoupdate`.
 
 ## Development
 
