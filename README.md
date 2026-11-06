@@ -31,8 +31,9 @@ We test the action only on Linux runners, both GitHub-hosted and self-hosted.
 ```
 
 The examples use the tag of the latest release. The releases of this action are
-immutable, so this tag cannot change. A floating tag like `v0` can change. Each
-release updates these examples.
+immutable, so this tag cannot change. Each release updates these examples. You
+can use a floating tag like `v0`, but we do not recommend it, because it can
+change.
 
 The action installs only the tools that the selected `languages` need. If you
 do not set `languages`, the action finds them from the files in the repo.
@@ -214,7 +215,7 @@ repos:
     hooks:
       - id: composite-lint
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v6.0.0
+    rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c  # frozen: v6.0.0
     hooks:
       - id: check-symlinks
       - id: detect-private-key
@@ -232,7 +233,8 @@ hooks too. The pre-commit check of the action then runs them. It skips the
 this file, composite-lint does not do its pre-commit check, because pre-commit
 runs the other hooks itself.
 
-To update the revs, run `pre-commit autoupdate`.
+The pre-commit-hooks releases are not immutable, so the example uses the commit
+hash of the tag.
 
 ## Development
 

@@ -95,13 +95,14 @@ jobs:
           persist-credentials: false
           ref: ${{ env.BASE_BRANCH }}
 
-      # The examples use this release's tag (releases are immutable) and the bundled pre-commit-hooks rev
+      # The examples use this release's tag (releases are immutable) and the bundled pre-commit-hooks rev, which is a
+      # commit hash with a `# frozen: vX.Y.Z` comment (its releases aren't immutable)
       - name: Point the README examples at this release
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
-          hooks_rev="$(sed -nE 's/^\s*rev:\s*(\S+)$/\1/p' configs/pre-commit.yaml)"
+          hooks_rev="$(sed -nE 's/^\s*rev:\s*(.+)$/\1/p' configs/pre-commit.yaml)"
           readonly hooks_rev
           sed -Ei \
             -e "s|(uses: ReadOnlyTech/composite-lint@).*|\1${RELEASE_TAG}|" \
