@@ -244,6 +244,9 @@ bin/lint.sh run
 
 # check tests/pass lints clean and each tests/fail case fails as expected
 tests/run.sh
+
+# check the release script against a throwaway origin
+tests/tag_release.sh
 ```
 
 Each `tests/fail/<language>/<case>/` directory contains the files to lint and

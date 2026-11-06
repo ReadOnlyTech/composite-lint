@@ -1,12 +1,13 @@
 # yamllint disable rule:line-length
 ---
 
-name: Update Tags
+name: Update README
 
 on:  # yamllint disable-line rule:truthy
-  release:
-    types:
-      - published
+  # scripts/tag_release.sh pushes the vX.Y.Z tag last, after the floating tags
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
   workflow_dispatch:
 
 concurrency:
@@ -16,79 +17,9 @@ concurrency:
 permissions: {}
 
 jobs:
-  tags:
-    name: Update Floating Tags
-    runs-on: ubuntu-latest
-    if: ${{ !github.event.release.prerelease }}
-    permissions:
-      contents: write  # to create and update tags
-    outputs:
-      latest: ${{ steps.tags.outputs.latest }}
-    steps:
-      # vX.Y, vX, and latest get set to the same commit as vX.Y.Z
-      # IFF vX.Y.Z is the newest release for each of those series
-      - name: Update tags
-        id: tags
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.event.release.tag_name || 'latest' }}
-          REPO: ${{ github.repository }}
-          SHA: ${{ github.sha }}
-        run: |
-          # without shell: bash, pipefail is off, which would let a failed `gh api` look like "not the newest"
-          set -o pipefail
-
-          if [[ ! ${RELEASE_TAG} =~ ^v([0-9]+)\.([0-9]+)\.[0-9]+$ ]]; then
-            if [[ "${RELEASE_TAG}" == 'latest' ]]; then
-              echo 'latest=true' >>"${GITHUB_OUTPUT}"
-            fi
-
-            echo "${RELEASE_TAG} isn't a full vX.Y.Z release; leaving the floating tags alone"
-            exit
-          fi
-
-          major="v${BASH_REMATCH[1]}"
-          minor="${major}.${BASH_REMATCH[2]}"
-          readonly major minor
-
-          move_tag() {
-            local tag="${1}"
-            readonly tag
-            if gh api "repos/${REPO}/git/ref/tags/${tag}" >/dev/null 2>&1; then
-              gh api -X PATCH "repos/${REPO}/git/refs/tags/${tag}" -f sha="${SHA}" -F force=true >/dev/null
-            else
-              gh api -X POST "repos/${REPO}/git/refs" -f ref="refs/tags/${tag}" -f sha="${SHA}" >/dev/null
-            fi
-
-            echo "${tag} -> ${SHA}"
-            if [[ ${tag} == latest ]]; then
-              echo 'latest=true' >>"${GITHUB_OUTPUT}"
-            fi
-          }
-
-          # Moves the given tag to this release if it's the newest full release whose tag starts with the given prefix
-          move_if_newest() {
-            local tag="${1}" prefix="${2}" newest
-            newest="$(gh api --paginate "repos/${REPO}/git/matching-refs/tags/${prefix}" --jq '.[].ref | ltrimstr("refs/tags/")' |
-              grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)"
-            readonly tag prefix newest
-
-            if [[ ${newest} == "${RELEASE_TAG}" ]]; then
-              move_tag "${tag}"
-            else
-              echo "${RELEASE_TAG} isn't the newest release for ${tag} (${newest} is); leaving it alone"
-            fi
-          }
-
-          move_if_newest "${minor}" "${minor}."
-          move_if_newest "${major}" "${major}."
-          move_if_newest latest v
-
   readme:
     name: Update README
-    needs: tags
     runs-on: ubuntu-latest
-    if: ${{ needs.tags.outputs.latest == 'true' }}
     permissions:
       contents: write  # to push the update branch
       pull-requests: write  # to open the PR
@@ -113,8 +44,8 @@ jobs:
           # without shell: bash, pipefail is off, which would let a failed `gh api` give an empty tag
           set -o pipefail
 
-          # The newest full release: this one when it moved latest, and still found on manual runs, which have no
-          # release. The API lists tags alphabetically, so v0.0.10 would come before v0.0.2 without sort -V.
+          # The newest full release, also on manual runs. The API lists tags alphabetically, so v0.0.10 would come
+          # before v0.0.2 without sort -V.
           release_tag="$(gh api --paginate "repos/${REPO}/git/matching-refs/tags/v" --jq '.[].ref | ltrimstr("refs/tags/")' |
             grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)"
           hooks_rev="$(sed -nE 's/^\s*rev:\s*(.+)$/\1/p' configs/pre-commit.yaml)"
