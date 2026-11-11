@@ -5,6 +5,10 @@ name: Lint and Test
 
 on:  # yamllint disable-line rule:truthy
   pull_request:
+    paths-ignore: &ignored_paths
+      - '.github/CODEOWNERS'
+      - 'LICENSE'
+      - 'README.md'
     types:
       - opened
       - synchronize
@@ -12,6 +16,7 @@ on:  # yamllint disable-line rule:truthy
   push:
     branches:
       - main
+    paths-ignore: *ignored_paths
   workflow_dispatch:
 
 concurrency:
