@@ -48,3 +48,9 @@ jobs:
       - name: Run release script tests
         if: ${{ !cancelled() }}
         run: tests/tag_release.sh
+
+      - name: Run tool version updater tests
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: tests/bump_tool_versions.py
