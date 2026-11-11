@@ -11,8 +11,8 @@ on:  # yamllint disable-line rule:truthy
       - 'README.md'
     types:
       - opened
-      - synchronize
       - reopened
+      - synchronize
   push:
     branches:
       - main
