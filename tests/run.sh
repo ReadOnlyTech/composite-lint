@@ -108,6 +108,9 @@ detects 'options override the config' '["yaml"]' -c <(echo 'languages: python') 
 LINT_LANGUAGES=yaml detects 'the environment overrides the config' '["yaml"]' -c <(echo 'languages: python') tests/pass
 detects 'config and option excludes add up' '["pre-commit","woke","yaml"]' \
   -c <(echo 'exclude: tests/pass/python') -x tests/pass/shell tests/pass/python tests/pass/shell tests/pass/yaml
+detects "a .go file brings in its module's go.mod" '["go","pre-commit","woke"]' tests/pass/go/main.go
+detects "a .go file's module, though its go.mod is outside the config paths" '["go","pre-commit","woke"]' \
+  -c <(echo 'paths: tests/pass/go/main.go') tests/pass
 detects 'given paths only count within the config paths' '["pre-commit","python","woke"]' \
   -c <(echo 'paths: tests/pass/python') tests/pass
 
@@ -180,6 +183,13 @@ else
   echo 'ok: go.mod over .go-version'
 fi
 rm "${repo}"/.*-version "${repo}/go.mod"
+output="$(cd "${repo}" && "${here}/${lint}" versions -l go 2>&1)"
+if [[ ${output} != *"go-version-file ${here}/versions/.go-version"* ]]; then
+  echo "${output}"
+  fail "no go.mod or .go-version: expected the bundled version"
+else
+  echo 'ok: the bundled Go version, without go.mod or .go-version'
+fi
 
 # Which files: each step adds a failing one, which only the step about it should pick up
 printf 'ignored.yml\n.hidden/\nnode_modules/\n' >"${repo}/.gitignore"

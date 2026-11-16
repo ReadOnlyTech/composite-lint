@@ -64,7 +64,7 @@ inputs:
     description: Go version.
     required: false
   go-version-file:
-    description: File that contains the Go version. The default is the go.mod file in the repo root. If go.mod does not exist, the default is the .go-version file in the repo root, if it exists.
+    description: File that contains the Go version. The default is the go.mod file in the repo root. If go.mod does not exist, the default is the .go-version file in the repo root. If neither exists, the default is the bundled file.
     required: false
   golangci-lint-config:
     description: golangci-lint config file.

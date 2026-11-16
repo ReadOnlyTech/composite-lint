@@ -18,7 +18,9 @@
 #   -h, --help
 #
 # Paths default to the config's `paths`, or `.`. When both are given, only paths within the config's are linted
-# (e.g. for pre-commit, which passes every changed file).
+# (e.g. for pre-commit, which passes every changed file). Go is linted per module, so a .go file brings in its whole
+# module, even if the paths or excludes leave out its go.mod. One in no module is linted with the other .go files in its
+# directory.
 #
 # Files are those git tracks or would track. With the include-ignored setting true, the files it ignores are too, but
 # only non-hidden ones unless include-hidden is true. Excludes default to `.git **/node_modules`, which setting any
@@ -589,10 +591,12 @@ print_versions() {
     runtime_setting python "${python_file:-${ROOT}/versions/.python-version}"
   fi
   if is_selected go; then
-    # go.mod is Go's own, so it wins; with neither, setup-go reports the missing go.mod
+    # go.mod is Go's own, so it wins; with neither, e.g. for modules only in subdirs, the bundled version
     go_file="$(repo_version_file go)"
-    if [[ -f ${TOP}/go.mod || -z ${go_file} ]]; then
+    if [[ -f ${TOP}/go.mod ]]; then
       go_file=go.mod
+    elif [[ -z ${go_file} ]]; then
+      go_file="${ROOT}/versions/.go-version"
     fi
     readonly go_file
     runtime_setting go "${go_file}"
@@ -650,6 +654,34 @@ list_files() {
   fi
 }
 
+# What Go lints, once each: the go.mod of each module that the given .go and go.mod files are in, and the directory of
+# each .go file in no module. Go is linted per module, so e.g. pre-commit's changed .go files bring in their modules,
+# even where the paths or excludes leave out the go.mod.
+go_targets() {
+  local path dir up
+  for path in "${@}"; do
+    if [[ ${path} == *.go || ${path##*/} == go.mod ]]; then
+      if [[ ${path} == */* ]]; then
+        echo "${path%/*}"
+      else
+        echo .
+      fi
+    fi
+  done | sort -u | while IFS= read -r dir; do
+    # physical, as git reports TOP
+    dir="$(cd "${dir}" && pwd -P)" || continue
+    up="${dir}"
+    while [[ ${up} == "${TOP}" || ${up} == "${TOP}"/* ]]; do
+      if [[ -f ${up}/go.mod ]]; then
+        echo "${up}/go.mod"
+        continue 2
+      fi
+      up="${up%/*}"
+    done
+    echo "${dir}"
+  done | sort -u
+}
+
 collect_files() {
   local excludes=() p f list
   for p in "${EXCLUDES[@]}"; do
@@ -694,7 +726,6 @@ matches() {
       esac
       [[ ${base} == action.yml || ${base} == action.yaml ]] ;;
     docker) [[ ${base} == *Dockerfile* || ${base} == *.dockerfile || ${base} == Containerfile* ]] ;;
-    go) [[ ${base} == go.mod ]] ;;
     pre-commit) true ;;
     python) [[ ${base} == *.py ]] ;;
     shell) [[ ${base} == *.sh || ${base} == *.bash ]] || { [[ ${base} != *.* ]] && is_shell_script "${file}"; } ;;
@@ -708,6 +739,12 @@ files_for() {
   local lang="${1}" f
   readonly lang
   LANG_FILES=()
+  if [[ ${lang} == go ]]; then
+    while IFS= read -r f; do
+      LANG_FILES+=("${f}")
+    done < <(go_targets "${FILES[@]}")
+    return
+  fi
   for f in "${FILES[@]}"; do
     # only pre-commit gets broken symlinks, so check-symlinks can report them rather than every linter failing on them
     if [[ ${lang} != pre-commit && ! -e ${f} ]]; then
@@ -838,22 +875,28 @@ lint_docker() {
 }
 
 lint_go() {
-  local rc=0 mod opts=(--no-config) cfg
+  local rc=0 mod opts=(--show-stats=false --no-config) cfg
   cfg="$(config golangci-lint)"
   readonly cfg
   if [[ -n ${cfg} ]]; then
-    opts=(-c "${cfg}")
+    opts=(--show-stats=false -c "${cfg}")
   fi
   readonly opts
 
   for mod in "${LANG_FILES[@]}"; do
+    # a directory in no module, where ./... finds nothing; its files are linted together, as one package
+    # assumes one package per directory, so an external _test package there fails to typecheck
+    if [[ ${mod} != */go.mod ]]; then
+      (cd "${mod}" && golangci-lint run "${opts[@]}" ./*.go) || rc=1
+      continue
+    fi
     (
       cd "$(dirname "${mod}")"
       go mod tidy -diff
     ) || rc=1
     (
       cd "$(dirname "${mod}")"
-      golangci-lint run --show-stats=false "${opts[@]}" ./...
+      golangci-lint run "${opts[@]}" ./...
     ) || rc=1
   done
   readonly rc

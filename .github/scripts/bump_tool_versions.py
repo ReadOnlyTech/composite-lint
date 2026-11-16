@@ -62,6 +62,8 @@ def version_file(name, repo, file, usable=None):
 # the new version is usable)
 TOOLS = (
     version_file("actionlint", "rhysd/actionlint", "actionlint"),
+    # The Go for repos without their own go.mod or .go-version; its tags are like go1.27.4
+    ("Go", "golang/go", "go", "versions/.go-version", VERSION_FILE, None),
     version_file("golangci-lint", "golangci/golangci-lint", "golangci-lint"),
     version_file("hadolint", "hadolint/hadolint", "hadolint"),
     (
