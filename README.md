@@ -15,10 +15,10 @@ We test the action only on Linux runners, both GitHub-hosted and self-hosted.
     persist-credentials: false
 
 - name: Run linting (strict, autodetect)
-  uses: ReadOnlyTech/composite-lint@v0.1.0
+  uses: ReadOnlyTech/composite-lint@v0.2.0
 
 - name: Run linting (custom)
-  uses: ReadOnlyTech/composite-lint@v0.1.0
+  uses: ReadOnlyTech/composite-lint@v0.2.0
   with:
     cache: false
     paths: src
@@ -227,7 +227,7 @@ This is the recommended `.pre-commit-config.yaml`:
 
 repos:
   - repo: https://github.com/ReadOnlyTech/composite-lint
-    rev: v0.1.0
+    rev: v0.2.0
     hooks:
       - id: composite-lint
   - repo: https://github.com/pre-commit/pre-commit-hooks
