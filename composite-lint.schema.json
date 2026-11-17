@@ -11,6 +11,11 @@
       "type": "string",
       "pattern": "^\\s*(actions|docker|go|kotlin|pre-commit|python|shell|terraform|woke|yaml)(\\s*[,\\s]\\s*(actions|docker|go|kotlin|pre-commit|python|shell|terraform|woke|yaml))*\\s*$"
     },
+    "exclude-languages": {
+      "description": "Languages not to lint, separated by commas or whitespace. The action removes them from the languages that it finds. Set only one of this key and languages.",
+      "type": "string",
+      "pattern": "^\\s*(actions|docker|go|kotlin|pre-commit|python|shell|terraform|woke|yaml)(\\s*[,\\s]\\s*(actions|docker|go|kotlin|pre-commit|python|shell|terraform|woke|yaml))*\\s*$"
+    },
     "paths": {
       "description": "Paths to lint, relative to the repo root and separated by commas or whitespace. The default is the repo root.",
       "type": "string"

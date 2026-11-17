@@ -119,6 +119,18 @@ PRE_COMMIT=1 detects 'a hook of another pre-commit config keeps the check' '["pr
 detects 'config languages' '["python","shell"]' -c <(echo 'languages: python, shell') tests/pass
 detects 'options override the config' '["yaml"]' -c <(echo 'languages: python') -l yaml tests/pass
 LINT_LANGUAGES=yaml detects 'the environment overrides the config' '["yaml"]' -c <(echo 'languages: python') tests/pass
+detects 'excluded languages' '["python"]' -lx pre-commit,woke tests/pass/python
+detects 'config excluded languages' '["python"]' -c <(echo 'exclude-languages: pre-commit woke') tests/pass/python
+detects 'option languages override config excluded languages' '["woke"]' \
+  -c <(echo 'exclude-languages: woke') -l woke tests/pass/python
+LINT_EXCLUDE_LANGUAGES=woke detects 'environment excluded languages override config languages' '["python"]' \
+  -c <(echo 'languages: woke') tests/pass/python
+both='lint: set only one of languages and exclude-languages'
+detects 'option languages and excluded languages together' "${both}" -l woke -lx yaml tests/pass/python
+detects 'config languages and excluded languages together' "${both}" \
+  -c <(printf 'languages: woke\nexclude-languages: yaml\n') tests/pass/python
+LINT_LANGUAGES=woke LINT_EXCLUDE_LANGUAGES=yaml detects 'environment languages and excluded languages together' \
+  "${both}" tests/pass/python
 detects 'config and option excludes add up' '["pre-commit","woke","yaml"]' \
   -c <(echo 'exclude: tests/pass/python') -x tests/pass/shell tests/pass/python tests/pass/shell tests/pass/yaml
 detects "a .go file brings in its module's go.mod" '["go","pre-commit","woke"]' tests/pass/go/main.go

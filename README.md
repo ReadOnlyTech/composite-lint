@@ -36,7 +36,8 @@ can use a floating tag like `v0`, but we do not recommend it because it can
 change.
 
 The action installs only the tools that the selected `languages` need. If you
-do not set `languages`, the action finds them from the files in the repo.
+do not set `languages`, the action finds them from the files in the repo. To
+skip some of the languages that it finds, set `exclude-languages`.
 
 ### Versions
 
@@ -188,8 +189,8 @@ Tools: `yamllint -s`.
 
 ## Other Checks
 
-These checks are on by default. A custom `languages` list turns off each check
-that it does not include:
+These checks are on by default. To turn one off, add it to `exclude-languages`.
+To instead use an exact set, add it to `languages`.
 
 - `pre-commit`: Runs the hooks in the file that `pre-commit-config` gives. If
   you do not set that input, it runs the hooks in the `.pre-commit-config.yaml`

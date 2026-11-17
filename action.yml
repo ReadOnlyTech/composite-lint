@@ -27,6 +27,9 @@ inputs:
   exclude:
     description: 'Paths and glob patterns to exclude, separated by commas or whitespace. In a pattern, `*` matches in one directory, and `**` matches across directories. A path or pattern also excludes all of the files under each match. The default is `.git **/node_modules`. If you set this input, your value replaces the default.'
     required: false
+  exclude-languages:
+    description: 'Languages not to lint, separated by commas or whitespace. The action removes them from the languages that it finds. Set only one of this input and languages.'
+    required: false
   github-token:
     description: Token for the online audits of zizmor and for the TFLint plugin downloads.
     required: false
@@ -184,6 +187,7 @@ runs:
       env:
         LINT_CONFIG_FILE: ${{ inputs.config-file }}
         LINT_EXCLUDE: ${{ inputs.exclude }}
+        LINT_EXCLUDE_LANGUAGES: ${{ inputs.exclude-languages }}
         LINT_GO_VERSION: ${{ inputs.go-version }}
         LINT_GO_VERSION_FILE: ${{ inputs.go-version-file }}
         LINT_INCLUDE_HIDDEN: ${{ inputs.include-hidden }}

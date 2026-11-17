@@ -16,6 +16,8 @@
 #                            present)
 #   -i, --install            with run: install first
 #   -l, --languages a,b      languages to lint, instead of detecting them
+#   -lx, --exclude-languages a,b
+#                            languages not to lint, out of those detected (not with -l)
 #   -q, --quiet              with run: show only the languages that fail (the quiet setting)
 #   -x, --exclude PATHSPEC   exclude files (repeatable, or comma-separated)
 #   -h, --help
@@ -252,7 +254,7 @@ config() {
 # config-file, github-token)
 config_keys() {
   local tool
-  echo languages paths exclude include-hidden include-ignored quiet
+  echo languages exclude-languages paths exclude include-hidden include-ignored quiet
   for tool in go java python terraform; do
     echo "${tool}-version ${tool}-version-file"
   done
@@ -263,9 +265,11 @@ config_keys() {
 
 # Sets each setting in the config file that isn't already set in the environment. Its paths are
 # relative to the repo root, so they're made absolute (and paths/exclude become git pathspecs from
-# the root).
+# the root). languages and exclude-languages count as one setting, so either in the environment
+# overrides both in the file.
 load_config() {
   local -r file="${1}"
+  local -r env_languages="${LINT_LANGUAGES:-}${LINT_EXCLUDE_LANGUAGES:-}"
   local keys line key value var items item pathspecs
   keys=" $(config_keys | tr '\n' ' ') "
   readonly keys
@@ -288,6 +292,11 @@ load_config() {
       continue
     fi
     case ${key} in
+      languages | exclude-languages)
+        if [[ -n ${env_languages} ]]; then
+          continue
+        fi
+        ;;
       paths | exclude)
         split items "${value}"
         pathspecs=()
@@ -767,16 +776,28 @@ files_for() {
   done
 }
 
+check_language() {
+  local -r lang="${1}"
+  [[ " ${LANGUAGES} " == *" ${lang} "* ]] || die "unknown language '${lang}' (supported: ${LANGUAGES})"
+}
+
+# The given languages, else those detected minus the excluded ones
 select_languages() {
   local lang kept=()
   SELECTED=()
+  for lang in "${EXCLUDE_LANGS[@]}"; do
+    check_language "${lang}"
+  done
   if ((${#LANGS[@]})); then
     for lang in "${LANGS[@]}"; do
-      [[ " ${LANGUAGES} " == *" ${lang} "* ]] || die "unknown language '${lang}' (supported: ${LANGUAGES})"
+      check_language "${lang}"
       SELECTED+=("${lang}")
     done
   else
     for lang in ${LANGUAGES}; do
+      if [[ " ${EXCLUDE_LANGS[*]} " == *" ${lang} "* ]]; then
+        continue
+      fi
       files_for "${lang}"
       if ((${#LANG_FILES[@]})); then
         SELECTED+=("${lang}")
@@ -1175,6 +1196,7 @@ readonly cmd
 cli_quiet=''
 config_file="${LINT_CONFIG_FILE:-}"
 cli_languages=''
+cli_exclude_languages=''
 cli_excludes=()
 cli_paths=()
 while ((${#})); do
@@ -1194,6 +1216,11 @@ while ((${#})); do
     -l | --languages)
       [[ -n ${value} ]] || die "${arg} needs a value"
       cli_languages="${value}"
+      shift 2
+      ;;
+    -lx | --exclude-languages)
+      [[ -n ${value} ]] || die "${arg} needs a value"
+      cli_exclude_languages="${value}"
       shift 2
       ;;
     -q | --quiet)
@@ -1223,6 +1250,12 @@ fi
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "not inside a git repository"
 TOP="$(git rev-parse --show-toplevel)"
 readonly TOP
+# Options win over the environment and the config, with languages and exclude-languages as one
+# setting (see load_config)
+if [[ -n ${cli_languages}${cli_exclude_languages} ]]; then
+  LINT_LANGUAGES="${cli_languages}"
+  LINT_EXCLUDE_LANGUAGES="${cli_exclude_languages}"
+fi
 if [[ -z ${config_file} && -f ${TOP}/.composite-lint.yml ]]; then
   config_file="${TOP}/.composite-lint.yml"
 fi
@@ -1231,14 +1264,14 @@ if [[ -n ${config_file} ]]; then
   [[ -r ${config_file} ]] || die "config file ${config_file} not found"
   load_config "${config_file}"
 fi
-readonly also_install cli_quiet config_file cli_languages cli_excludes cli_paths
+readonly also_install cli_quiet config_file cli_languages cli_exclude_languages cli_excludes cli_paths
 
-# options win over the environment and the config; LINT_LANGUAGES also accepts detect's JSON output
-if [[ -n ${cli_languages} ]]; then
-  split LANGS "${cli_languages}"
-else
-  LINT_LANGUAGES="${LINT_LANGUAGES:-}"
-  split LANGS "${LINT_LANGUAGES//[\[\]\"]/}"
+LINT_LANGUAGES="${LINT_LANGUAGES:-}"
+# also accepts detect's JSON output
+split LANGS "${LINT_LANGUAGES//[\[\]\"]/}"
+split EXCLUDE_LANGS "${LINT_EXCLUDE_LANGUAGES:-}"
+if ((${#LANGS[@]} && ${#EXCLUDE_LANGS[@]})); then
+  die "set only one of languages and exclude-languages"
 fi
 # Excludes set in the environment or config replace the defaults; options add to whichever apply
 CUSTOM_EXCLUDES=false
@@ -1263,7 +1296,7 @@ fi
 if ! ((${#PATHS[@]})); then
   PATHS=(.)
 fi
-readonly LANGS EXCLUDES SCOPE PATHS
+readonly LANGS EXCLUDE_LANGS EXCLUDES SCOPE PATHS
 
 INCLUDE_IGNORED="${LINT_INCLUDE_IGNORED:-false}"
 INCLUDE_HIDDEN="${LINT_INCLUDE_HIDDEN:-false}"
