@@ -47,7 +47,8 @@ Each tool gets its version from the first of these that exists:
    [`versions/`](versions). Examples are `.python-version` and
    `.terraform-version`. For Go, the `go.mod` file in the repo root comes first.
 3. The bundled file in [`versions/`](versions). The bundled versions are
-   usually the latest stable releases.
+   usually the latest stable releases. For Java, the bundled version is the
+   latest LTS release.
 
 ### Linter Configs
 
@@ -66,6 +67,7 @@ Each linter gets its linter config from the first of these that exists:
 | flake8 | `setup.cfg`, `tox.ini`, `.flake8` (only with a `[flake8]` section) |
 | golangci-lint | `.golangci.yml`, `.golangci.yaml`, `.golangci.toml`, `.golangci.json` |
 | hadolint | `.hadolint.yaml`, `.hadolint.yml` |
+| ktfmt | `.ktfmt` (see [Kotlin](#kotlin)) |
 | pre-commit | `.pre-commit-config.yaml` |
 | ShellCheck | `.shellcheckrc`, `shellcheckrc` |
 | TFLint | `.tflint.hcl` |
@@ -151,6 +153,20 @@ also does its online audits when `GH_TOKEN` or `gh auth token` gives a token.
 ### Go
 
 Tools: `golangci-lint` and `go mod tidy`.
+
+### Kotlin
+
+Tools: `ktfmt --dry-run --set-exit-if-changed`, for `.kt` and `.kts` files.
+ktfmt runs as a jar, so it needs Java. The action installs Java with
+`actions/setup-java`, which also changes the Java for the other steps of the
+job. Local runs use the `java` on the `PATH`.
+
+ktfmt has no config file. Its linter config is a file of ktfmt flags, with one
+flag on each line. The bundled file has `--kotlinlang-style` (4-space indents)
+and `--enable-editorconfig`. Thus, by default, an `.editorconfig` file can
+change the line length, the indents, and the trailing commas. Its values
+override the values of the style flag. The flags file cannot have options that
+stop the check, such as `--stdin-name`.
 
 ### Python
 

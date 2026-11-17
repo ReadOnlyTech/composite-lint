@@ -11,29 +11,32 @@
 #   v, versions  print each tool's version (and the runtimes' settings, for the action)
 #
 # Options:
-#   -c, --config-file FILE   settings file (default: .composite-lint.yml in the repo root, if present)
+#   -c, --config-file FILE   settings file (default: .composite-lint.yml in the repo root, if
+#                            present)
 #   -i, --install            with run: install first
 #   -l, --languages a,b      languages to lint, instead of detecting them
 #   -x, --exclude PATHSPEC   exclude files (repeatable, or comma-separated)
 #   -h, --help
 #
-# Paths default to the config's `paths`, or `.`. When both are given, only paths within the config's are linted
-# (e.g. for pre-commit, which passes every changed file). Go is linted per module, so a .go file brings in its whole
-# module, even if the paths or excludes leave out its go.mod. One in no module is linted with the other .go files in its
-# directory.
+# Paths default to the config's `paths`, or `.`. When both are given, only paths within the config's
+# are linted (e.g. for pre-commit, which passes every changed file). Go is linted per module, so a
+# .go file brings in its whole module, even if the paths or excludes leave out its go.mod. One in no
+# module is linted with the other .go files in its directory.
 #
-# Files are those git tracks or would track. With the include-ignored setting true, the files it ignores are too, but
-# only non-hidden ones unless include-hidden is true. Excludes default to `.git **/node_modules`, which setting any
-# replaces (though -x adds to them); in a pattern, `*` matches within a directory and `**` across them, and anything
-# matched excludes everything under it.
+# Files are those git tracks or would track. With the include-ignored setting true, the files it
+# ignores are too, but only non-hidden ones unless include-hidden is true. Excludes default to
+# `.git **/node_modules`, which setting any replaces (though -x adds to them); in a pattern, `*`
+# matches within a directory and `**` across them, and anything matched excludes everything under
+# it.
 #
-# Settings come from, in order of precedence: options; environment variables (as the action passes its inputs); the
-# config file; and finally what's bundled in versions/ and configs/. The config file takes the action's input names
-# as flat `key: value` lines, e.g. `shellcheck-version: 0.10.0`, with paths relative to the repo root; the matching
-# environment variable is LINT_ plus the name in capitals with underscores, e.g. LINT_SHELLCHECK_VERSION.
+# Settings come from, in order of precedence: options; environment variables (as the action passes
+# its inputs); the config file; and finally what's bundled in versions/ and configs/. The config
+# file takes the action's input names as flat `key: value` lines, e.g. `shellcheck-version: 0.10.0`,
+# with paths relative to the repo root; the matching environment variable is LINT_ plus the name in
+# capitals with underscores, e.g. LINT_SHELLCHECK_VERSION.
 #
-# A linter's config, if not set that way, is the repo's own (e.g. .yamllint), found in its root the way the linter
-# itself would; only failing that is the bundled one used.
+# A linter's config, if not set that way, is the repo's own (e.g. .yamllint), found in its root the
+# way the linter itself would; only failing that is the bundled one used.
 #
 # All inputs are validated before anything is installed or run. After that, a language whose tools
 # can't be installed or found fails on its own and the other languages still run.
@@ -43,16 +46,17 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-LANGUAGES='actions docker go pre-commit python shell terraform woke yaml'
+LANGUAGES='actions docker go kotlin pre-commit python shell terraform woke yaml'
 # for when no excludes are set; mostly relevant to linting files git ignores (include-ignored)
 DEFAULT_EXCLUDES='.git **/node_modules'
 PIP_TOOLS=' flake8 pre-commit yamllint zizmor '
 CACHE="${LINT_CACHE:-${RUNNER_TOOL_CACHE:-${XDG_CACHE_HOME:-${HOME}/.cache}}/composite-lint}"
 readonly ROOT LANGUAGES DEFAULT_EXCLUDES PIP_TOOLS CACHE
 
-# setup-python's builds load libpython from their own lib dir, which setup-python only adds to the loader's path when
-# it updates the environment, which the action has it not do. GitHub-hosted runners have it configured anyway; other
-# runners don't, so without this the Python (and the venvs made from it) can't even start.
+# setup-python's builds load libpython from their own lib dir, which setup-python only adds to the
+# loader's path when it updates the environment, which the action has it not do. GitHub-hosted
+# runners have it configured anyway; other runners don't, so without this the Python (and the venvs
+# made from it) can't even start.
 if [[ -n ${LINT_PYTHON:-} ]]; then
   LD_LIBRARY_PATH="$(dirname "$(dirname "${LINT_PYTHON}")")/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
   readonly LD_LIBRARY_PATH
@@ -143,8 +147,8 @@ read_version_file() {
   done <"${file}"
 }
 
-# The repo's own version file for a tool, if it has one in its root: .<tool>-version, like pyenv's .python-version and
-# tfenv's .terraform-version (and the bundled versions/)
+# The repo's own version file for a tool, if it has one in its root: .<tool>-version, like pyenv's
+# .python-version and tfenv's .terraform-version (and the bundled versions/)
 repo_version_file() {
   local tool="${1}"
   readonly tool
@@ -181,7 +185,8 @@ version() {
 
   [[ -n ${v} ]] || die "no version found for ${tool}"
 
-  # Inputs may come with or without a `v`. Release downloads are tagged with one; pip and Terraform aren't.
+  # Inputs may come with or without a `v`. Release downloads are tagged with one; pip and Terraform
+  # aren't.
   if is_pip "${tool}" || [[ ${tool} == terraform ]]; then
     echo "${v#v}"
   else
@@ -196,6 +201,7 @@ bundled_config() {
     actionlint) echo actionlint.yml ;;
     flake8) echo flake8.ini ;;
     hadolint) echo hadolint.yml ;;
+    ktfmt) echo ktfmt ;;
     pre-commit) echo pre-commit.yaml ;;
     shellcheck) echo shellcheckrc ;;
     tflint) echo tflint.hcl ;;
@@ -204,8 +210,8 @@ bundled_config() {
   esac
 }
 
-# Where each tool looks for a config by default, in its own order of precedence. Only the repo root is checked, rather
-# than per directory, and not the user's home directory.
+# Where each tool looks for a config by default, in its own order of precedence. Only the repo root
+# is checked, rather than per directory, and not the user's home directory.
 repo_configs() {
   local tool="${1}"
   readonly tool
@@ -214,6 +220,8 @@ repo_configs() {
     flake8) echo setup.cfg tox.ini .flake8 ;;
     golangci-lint) echo .golangci.yml .golangci.yaml .golangci.toml .golangci.json ;;
     hadolint) echo .hadolint.yaml .hadolint.yml ;;
+    # ktfmt itself has no config file, only flags; this one has them, one per line (see ktfmt_flags)
+    ktfmt) echo .ktfmt ;;
     pre-commit) echo .pre-commit-config.yaml ;;
     shellcheck) echo .shellcheckrc shellcheckrc ;;
     tflint) echo .tflint.hcl ;;
@@ -240,7 +248,8 @@ repo_config() {
   done
 }
 
-# Absolute path to the config to use: the input, else the repo's own, else the bundled one, else nothing
+# Absolute path to the config to use: the input, else the repo's own, else the bundled one, else
+# nothing
 config() {
   local tool="${1}" var path repo bundled
   readonly tool
@@ -260,20 +269,22 @@ config() {
   fi
 }
 
-# Every key the config file accepts: the action's inputs, minus the ones only it uses (cache, config-file, github-token)
+# Every key the config file accepts: the action's inputs, minus the ones only it uses (cache,
+# config-file, github-token)
 config_keys() {
   local tool
   echo languages paths exclude include-hidden include-ignored
-  for tool in go python terraform; do
+  for tool in go java python terraform; do
     echo "${tool}-version ${tool}-version-file"
   done
-  for tool in actionlint flake8 golangci-lint hadolint pre-commit shellcheck tflint woke yamllint zizmor; do
+  for tool in actionlint flake8 golangci-lint hadolint ktfmt pre-commit shellcheck tflint woke yamllint zizmor; do
     echo "${tool}-config ${tool}-version ${tool}-version-file"
   done
 }
 
-# Sets each setting in the config file that isn't already set in the environment. Its paths are relative to the repo
-# root, so they're made absolute (and paths/exclude become git pathspecs from the root).
+# Sets each setting in the config file that isn't already set in the environment. Its paths are
+# relative to the repo root, so they're made absolute (and paths/exclude become git pathspecs from
+# the root).
 load_config() {
   local file="${1}" keys line key value var items item pathspecs
   keys=" $(config_keys | tr '\n' ' ') "
@@ -324,6 +335,7 @@ tools_for() {
     actions) echo actionlint shellcheck zizmor ;;
     docker) echo hadolint ;;
     go) echo golangci-lint ;;
+    kotlin) echo ktfmt ;;
     pre-commit) echo pre-commit ;;
     python) echo flake8 ;;
     shell) echo shellcheck ;;
@@ -376,6 +388,9 @@ binary_url() {
       [[ ${ARCH} == arm64 ]] && arch=arm64
       readonly os arch
       echo "${gh}/hadolint/hadolint/releases/download/${tag}/hadolint-${os}-${arch}" ;;
+    # the jar rather than the native builds, which are only for some platforms
+    ktfmt)
+      echo "${gh}/Kotlin/ktfmt/releases/download/${tag}/ktfmt-${v}-with-dependencies.jar" ;;
     shellcheck)
       local arch=x86_64
       [[ ${ARCH} == arm64 ]] && arch=aarch64
@@ -412,10 +427,16 @@ install_binary() {
   case ${url} in
     *.tar.gz) tar -xzf "${tmp}/download" -C "${tmp}" ;;
     *.zip) unzip -q "${tmp}/download" -d "${tmp}" ;;
+    # run by a wrapper, with the java on the PATH
+    *.jar)
+      # $0 and $@ are for the wrapper to expand
+      # shellcheck disable=SC2016
+      mv "${tmp}/download" "${tmp}/${tool}.jar" &&
+        printf '#!/bin/sh\nexec java -jar "$(dirname "$0")/%s.jar" "$@"\n' "${tool}" >"${tmp}/${tool}" ;;
     *) mv "${tmp}/download" "${tmp}/${tool}" ;;
   esac &&
     mkdir -p "${dest}" &&
-    find "${tmp}" -type f -name "${tool}" -exec mv {} "${dest}/${tool}" \;
+    find "${tmp}" -type f \( -name "${tool}" -o -name "${tool}.jar" \) -exec mv {} "${dest}/" \;
   rm -rf "${tmp}"
   [[ -f ${dest}/${tool} ]] && chmod +x "${dest}/${tool}"
 }
@@ -424,8 +445,8 @@ install_pip() {
   local tool="${1}" tool_version="${2}"
   local venv="${CACHE}/venv/${tool}-${tool_version}"
   readonly tool tool_version venv
-  # A venv breaks if the Python it was made from has gone (e.g. after an upgrade) or it's lost files, so check the tool
-  # actually runs
+  # A venv breaks if the Python it was made from has gone (e.g. after an upgrade) or it's lost
+  # files, so check the tool actually runs
   if [[ -x ${venv}/bin/${tool} ]] && "${venv}/bin/${tool}" --version >/dev/null 2>&1; then
     return
   fi
@@ -466,8 +487,8 @@ install_path() {
   fi
 }
 
-# Installs everything it can; a tool that fails doesn't stop the others.
-# With LINT_PRUNE=true, also deletes any other installed versions (for caches that would otherwise only grow).
+# Installs everything it can; a tool that fails doesn't stop the others. With LINT_PRUNE=true, also
+# deletes any other installed versions (for caches that would otherwise only grow).
 install_tools() {
   local tool v path keep=' ' status=0
   platform
@@ -501,6 +522,7 @@ runtimes_for() {
   readonly lang
   case ${lang} in
     go) echo go ;;
+    kotlin) echo java ;;
     terraform) echo terraform ;;
   esac
 }
@@ -513,8 +535,8 @@ need() {
   return 1
 }
 
-# Puts the installed version of each of a language's tools first on the PATH, falling back to whatever's
-# already there. Fails if anything the language needs is missing.
+# Puts the installed version of each of a language's tools first on the PATH, falling back to
+# whatever's already there. Fails if anything the language needs is missing.
 setup_language() {
   local lang="${1}" tool dir status=0
   readonly lang
@@ -532,7 +554,8 @@ setup_language() {
   return ${status}
 }
 
-# Dies on any invalid version or config input for the selected languages, before anything else happens
+# Dies on any invalid version or config input for the selected languages, before anything else
+# happens
 validate_inputs() {
   local tool
   for tool in $(selected_tools); do
@@ -540,7 +563,11 @@ validate_inputs() {
     config "${tool}" >/dev/null
   done
   runtime_setting go '' >/dev/null
+  runtime_setting java '' >/dev/null
   runtime_setting python '' >/dev/null
+  if is_selected kotlin; then
+    ktfmt_flags >/dev/null
+  fi
   if is_selected terraform; then
     version terraform >/dev/null
   fi
@@ -552,7 +579,8 @@ is_selected() {
   [[ " ${SELECTED[*]} " == *" ${lang} "* ]]
 }
 
-# A runtime's version setting, for the action's setup-<runtime> step: its version or its version file
+# A runtime's version setting, for the action's setup-<runtime> step: its version or its version
+# file
 runtime_setting() {
   local runtime="${1}" default_file="${2}" key raw file
   readonly runtime default_file
@@ -572,10 +600,11 @@ runtime_setting() {
 }
 
 print_versions() {
-  local tool python=false python_file go_file
+  local tool python=false python_file go_file java_file
   for tool in $(selected_tools); do
     echo "${tool} $(version "${tool}")"
-    # these configs pin the versions of what the tools install (TFLint's ruleset, pre-commit's hooks)
+    # these configs pin the versions of what the tools install (TFLint's ruleset, pre-commit's
+    # hooks)
     case ${tool} in
       pre-commit | tflint) echo "${tool}-config $(cksum <"$(config "${tool}")")" ;;
     esac
@@ -591,7 +620,8 @@ print_versions() {
     runtime_setting python "${python_file:-${ROOT}/versions/.python-version}"
   fi
   if is_selected go; then
-    # go.mod is Go's own, so it wins; with neither, e.g. for modules only in subdirs, the bundled version
+    # go.mod is Go's own, so it wins; with neither, e.g. for modules only in subdirs, the bundled
+    # version
     go_file="$(repo_version_file go)"
     if [[ -f ${TOP}/go.mod ]]; then
       go_file=go.mod
@@ -601,6 +631,11 @@ print_versions() {
     readonly go_file
     runtime_setting go "${go_file}"
   fi
+  if is_selected kotlin; then
+    java_file="$(repo_version_file java)"
+    readonly java_file
+    runtime_setting java "${java_file:-${ROOT}/versions/.java-version}"
+  fi
   if is_selected terraform; then
     echo "terraform-version $(version terraform)"
   fi
@@ -608,9 +643,9 @@ print_versions() {
 
 # --- file discovery and language detection ---
 
-# The git pathspecs for an exclude. A plain path excludes everything under it. A pattern is a glob, where `*` matches
-# within a directory and `**` across them, and also excludes everything under what it matches (so e.g. **/node_modules
-# covers node_modules/ at any depth).
+# The git pathspecs for an exclude. A plain path excludes everything under it. A pattern is a glob,
+# where `*` matches within a directory and `**` across them, and also excludes everything under what
+# it matches (so e.g. **/node_modules covers node_modules/ at any depth).
 exclude_pathspecs() {
   local exclude="${1}" magic=exclude
   local path="${exclude}"
@@ -622,8 +657,8 @@ exclude_pathspecs() {
   fi
   readonly exclude path
 
-  # git never lists anything in .git anyway, and before 2.56, excluding a path shorter than the paths being listed
-  # could read out of bounds and list nothing at all
+  # git never lists anything in .git anyway, and before 2.56, excluding a path shorter than the
+  # paths being listed could read out of bounds and list nothing at all
   if [[ ${path} == .git || ${path} == .git/* ]]; then
     return
   fi
@@ -635,8 +670,9 @@ exclude_pathspecs() {
   fi
 }
 
-# Files within the given pathspecs: everything git tracks or would track, plus what it ignores if INCLUDE_IGNORED, but
-# then only hidden ones (any part of the path starting with `.`) if INCLUDE_HIDDEN
+# Files within the given pathspecs: everything git tracks or would track, plus what it ignores if
+# INCLUDE_IGNORED, but then only hidden ones (any part of the path starting with `.`) if
+# INCLUDE_HIDDEN
 list_files() {
   local pathspecs=("${@}") ignored
   readonly pathspecs
@@ -654,9 +690,9 @@ list_files() {
   fi
 }
 
-# What Go lints, once each: the go.mod of each module that the given .go and go.mod files are in, and the directory of
-# each .go file in no module. Go is linted per module, so e.g. pre-commit's changed .go files bring in their modules,
-# even where the paths or excludes leave out the go.mod.
+# What Go lints, once each: the go.mod of each module that the given .go and go.mod files are in,
+# and the directory of each .go file in no module. Go is linted per module, so e.g. pre-commit's
+# changed .go files bring in their modules, even where the paths or excludes leave out the go.mod.
 go_targets() {
   local path dir up
   for path in "${@}"; do
@@ -726,6 +762,7 @@ matches() {
       esac
       [[ ${base} == action.yml || ${base} == action.yaml ]] ;;
     docker) [[ ${base} == *Dockerfile* || ${base} == *.dockerfile || ${base} == Containerfile* ]] ;;
+    kotlin) [[ ${base} == *.kt || ${base} == *.kts ]] ;;
     pre-commit) true ;;
     python) [[ ${base} == *.py ]] ;;
     shell) [[ ${base} == *.sh || ${base} == *.bash ]] || { [[ ${base} != *.* ]] && is_shell_script "${file}"; } ;;
@@ -746,7 +783,8 @@ files_for() {
     return
   fi
   for f in "${FILES[@]}"; do
-    # only pre-commit gets broken symlinks, so check-symlinks can report them rather than every linter failing on them
+    # only pre-commit gets broken symlinks, so check-symlinks can report them rather than every
+    # linter failing on them
     if [[ ${lang} != pre-commit && ! -e ${f} ]]; then
       continue
     fi
@@ -797,14 +835,15 @@ print_json() {
 
 # --- linters ---
 # Each runs every check for its language against LANG_FILES and returns 1 if any failed.
-# zizmor and woke respect .gitignore, so they're left to find files themselves when that's equivalent (see
-# self_discovery). The rest always get LANG_FILES: yamllint and flake8 would lint gitignored dirs like .venv, and
-# neither hadolint nor shellcheck searches directories.
+# zizmor and woke respect .gitignore, so they're left to find files themselves when that's
+# equivalent (see self_discovery). The rest always get LANG_FILES: yamllint and flake8 would lint
+# gitignored dirs like .venv, and neither hadolint nor shellcheck searches directories.
 
-# Whether tools can be given the paths to search themselves: only when they're all directories (e.g. pre-commit
-# passes every file, which zizmor rejects unless it's YAML), and they'd find the same files. They follow .gitignore, so
-# not when linting ignored files, nor with custom excludes or a configured scope, which they wouldn't know about. (The
-# default excludes are things git ignores anyway.)
+# Whether tools can be given the paths to search themselves: only when they're all directories (e.g.
+# pre-commit passes every file, which zizmor rejects unless it's YAML), and they'd find the same
+# files. They follow .gitignore, so not when linting ignored files, nor with custom excludes or a
+# configured scope, which they wouldn't know about. (The default excludes are things git ignores
+# anyway.)
 self_discovery() {
   local p
   if [[ ${INCLUDE_IGNORED} == true || ${CUSTOM_EXCLUDES} == true ]] || ((${#SCOPE[@]})); then
@@ -845,7 +884,8 @@ lint_actions() {
   if ((${#workflows[@]})); then
     cfg="$(config actionlint)"
     readonly cfg
-    # actionlint passes scripts to shellcheck via stdin, so the rcfile's disables have to be passed as options
+    # actionlint passes scripts to shellcheck via stdin, so the rcfile's disables have to be passed
+    # as options
     SHELLCHECK_OPTS="$(sed -n 's/^[[:space:]]*disable=/-e /p' "$(config shellcheck)" | tr '\n' ' ')" \
       actionlint ${cfg:+-config-file "${cfg}"} "${workflows[@]}" || rc=1
   fi
@@ -884,7 +924,8 @@ lint_go() {
   readonly opts
 
   for mod in "${LANG_FILES[@]}"; do
-    # a directory in no module, where ./... finds nothing; its files are linted together, as one package
+    # a directory in no module, where ./... finds nothing; its files are linted together, as one
+    # package
     # assumes one package per directory, so an external _test package there fails to typecheck
     if [[ ${mod} != */go.mod ]]; then
       (cd "${mod}" && golangci-lint run "${opts[@]}" ./*.go) || rc=1
@@ -903,12 +944,50 @@ lint_go() {
   return ${rc}
 }
 
-# Runs the hooks in the pre-commit config (by default, detect-private-key and check-symlinks) on the files
+# The flags in ktfmt's config, one per line; blank lines and `#` comments are skipped. Dies on any
+# that would stop the check from working. ktfmt itself merges the rest with any .editorconfig.
+ktfmt_flags() {
+  local file line flags=()
+  file="$(config ktfmt)"
+  readonly file
+  while IFS= read -r line || [[ -n ${line} ]]; do
+    line="$(trim "${line}")"
+    if [[ -z ${line} || ${line} == '#'* ]]; then
+      continue
+    fi
+    case ${line} in
+      # what would have ktfmt print help, read stdin, or format only part of a file
+      -h | --help | -v | --version | --stdin-name* | --line* | --offset* | --length*)
+        die "${file}: '${line}' stops ktfmt from checking the files" ;;
+      # ktfmt takes anything else, even `-x`, as a file to format
+      -n | --*) ;;
+      *) die "${file}: '${line}' is not a ktfmt option; composite-lint gives the files" ;;
+    esac
+    flags+=("${line}")
+  done <"${file}"
+  readonly flags
+  if ((${#flags[@]})); then
+    printf '%s\n' "${flags[@]}"
+  fi
+}
+
+lint_kotlin() {
+  local flags=() flag
+  while IFS= read -r flag; do
+    flags+=("${flag}")
+  done < <(ktfmt_flags)
+  readonly flags
+  each ktfmt "${flags[@]}" --dry-run --set-exit-if-changed
+}
+
+# Runs the hooks in the pre-commit config (by default, detect-private-key and check-symlinks) on the
+# files
 lint_pre_commit() {
   export PRE_COMMIT_HOME="${PRE_COMMIT_HOME:-${CACHE}/pre-commit}"
   readonly PRE_COMMIT_HOME
-  # A config that includes this linter's own hook would run it again, which would run pre-commit again, forever. This
-  # run already covers everything, so skip the hook, and mark the nested run (see main) in case it has another id.
+  # A config that includes this linter's own hook would run it again, which would run pre-commit
+  # again, forever. This run already covers everything, so skip the hook, and mark the nested run
+  # (see main) in case it has another id.
   # pre-commit lists every hook even when it passes, hence quiet
   quiet each env LINT_NESTED=true "SKIP=composite-lint${SKIP:+,${SKIP}}" \
     pre-commit run -c "$(config pre-commit)" --files
@@ -922,7 +1001,8 @@ lint_shell() {
   each shellcheck --rcfile "$(config shellcheck)"
 }
 
-# Inits without a backend, keeping .terraform out of the checkout and leaving any lock file as it was found
+# Inits without a backend, keeping .terraform out of the checkout and leaving any lock file as it
+# was found
 terraform_validate() {
   local dir="${1}" rc=0 data output lockfile_opts=()
   local lock="${dir}/.terraform.lock.hcl"
@@ -933,7 +1013,8 @@ terraform_validate() {
   data="$(mktemp -d "${TF_DATA_ROOT}/XXXXXX")"
   readonly data lockfile_opts
 
-  # only the step that failed is shown, so a successful init's chatter doesn't bury validate's errors
+  # only the step that failed is shown, so a successful init's chatter doesn't bury validate's
+  # errors
   if ! output="$(TF_DATA_DIR="${data}" terraform -chdir="${dir}" init -backend=false -input=false "${lockfile_opts[@]}" 2>&1)" ||
     ! output="$(TF_DATA_DIR="${data}" terraform -chdir="${dir}" validate 2>&1)"; then
     echo "${output}"
@@ -947,7 +1028,8 @@ terraform_validate() {
   return ${rc}
 }
 
-# Every check for one directory, saving the output so parallel runs can be printed in order afterwards
+# Every check for one directory, saving the output so parallel runs can be printed in order
+# afterwards
 terraform_dir() {
   local dir="${1}" rc=0
   local out="${TF_DATA_ROOT}/out/dir${dir//\//%}"
@@ -979,8 +1061,8 @@ lint_terraform() {
   done < <(for f in "${LANG_FILES[@]}"; do dirname "${f}"; done | sort -u)
   readonly dirs
 
-  # The first directory runs alone so its init fills the plugin cache; the rest then read from it, rather than racing
-  # to write the same providers (which the cache doesn't support)
+  # The first directory runs alone so its init fills the plugin cache; the rest then read from it,
+  # rather than racing to write the same providers (which the cache doesn't support)
   terraform_dir "${dirs[0]}" || rc=1
   if ((${#dirs[@]} > 1)); then
     # ${1} is the child bash's argument, so it mustn't expand here
@@ -1023,7 +1105,8 @@ lint_yaml() {
   each yamllint -s -c "$(config yamllint)"
 }
 
-# Runs every language even if others fail. A setup failure (status 2) outranks lint failures (status 1).
+# Runs every language even if others fail. A setup failure (status 2) outranks lint failures
+# (status 1).
 run_linters() {
   local lang status=0
   for lang in "${SELECTED[@]}"; do
@@ -1175,8 +1258,9 @@ readonly INCLUDE_IGNORED INCLUDE_HIDDEN
 # hidden files git doesn't ignore are always linted, so alone it would do nothing
 [[ ${INCLUDE_HIDDEN} == false || ${INCLUDE_IGNORED} == true ]] || die 'include-hidden requires include-ignored'
 
-# Whether pre-commit is running this script as a hook, with the same config that the pre-commit check would use. If so,
-# pre-commit runs the other hooks in that config itself, so the check would only run them again.
+# Whether pre-commit is running this script as a hook, with the same config that the pre-commit
+# check would use. If so, pre-commit runs the other hooks in that config itself, so the check would
+# only run them again.
 HOOKED_BY_PRE_COMMIT=false
 if [[ ${PRE_COMMIT:-} == 1 && $(config pre-commit) == "${TOP}/.pre-commit-config.yaml" ]]; then
   HOOKED_BY_PRE_COMMIT=true
