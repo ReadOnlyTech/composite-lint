@@ -106,6 +106,7 @@ git -C "${work}" remote set-head origin main
 release 'the first release starts from 0.0.0' '' 0 'Pushed the README update'
 tags_at 'the first release adds every tag' main~1 latest v0 v0.1 v0.1.0
 readme_at 'the first release updates the README' v0.1.0
+release 'the README update is not a change to release' '' 1 'no commits since v0.1.0'
 
 commit 'fix: a bug'
 commit 'docs: words'

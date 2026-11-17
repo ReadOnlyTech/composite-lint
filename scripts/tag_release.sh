@@ -74,12 +74,15 @@ else
   range=HEAD
 fi
 readonly range
+# Skips this script's own README updates, which aren't changes to release
+readonly log_filter=(-E --invert-grep
+  --grep='^docs: use composite-lint v[0-9.]+ / pre-commit [^ ]+ in the README examples$')
 
-subjects="$(git log --format=%s "${range}")"
+subjects="$(git log --format=%s "${log_filter[@]}" "${range}")"
 readonly subjects
 [[ -n ${subjects} ]] || die "no commits since ${last}"
 echo "Commits since ${last:-the start}:"
-git log --format='  %h %s' "${range}"
+git log --format='  %h %s' "${log_filter[@]}" "${range}"
 
 IFS=. read -r major minor patch <<<"${last:-v0.0.0}"
 major="${major#v}"
