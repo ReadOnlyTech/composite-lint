@@ -153,11 +153,11 @@ echo "Tagged and pushed ${version}"
 
 # Points the README examples at the newest release
 update_readme() {
-  local hooks_rev hooks_hash
+  local hooks_rev hooks_version
   hooks_rev="$(sed -nE 's/^[[:space:]]*rev:[[:space:]]*(.+)$/\1/p' configs/pre-commit.yaml)"
-  # without its `# frozen: vX.Y.Z` comment
-  hooks_hash="${hooks_rev%%[[:space:]]*}"
-  readonly hooks_rev hooks_hash
+  # the vX.Y.Z from its `# frozen: vX.Y.Z` comment
+  hooks_version="${hooks_rev##*frozen: }"
+  readonly hooks_rev hooks_version
 
   sed -E \
     -e "s|(uses: ReadOnlyTech/composite-lint@).*|\1${version}|" \
@@ -166,11 +166,11 @@ update_readme() {
     README.md >README.md.new
   mv README.md.new README.md
   if git diff --quiet HEAD -- README.md; then
-    echo "The README already uses composite-lint ${version} / pre-commit ${hooks_hash}"
+    echo "The README already uses composite-lint ${version} / pre-commit ${hooks_version}"
     return
   fi
 
-  git commit -q -m "docs: use composite-lint ${version} / pre-commit ${hooks_hash} in the README examples" -- README.md
+  git commit -q -m "docs: use composite-lint ${version} / pre-commit ${hooks_version} in the README examples" -- README.md
   git push
   echo "Pushed the README update"
 }
