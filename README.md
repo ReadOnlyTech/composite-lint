@@ -207,11 +207,15 @@ bin/lint.sh install
 # lints the repo (or the config file's `paths`)
 bin/lint.sh run
 
-# does both the above
+# does both the above; without a command, it's `run --install`
 bin/lint.sh run --install
+bin/lint.sh
 
-# lints one language in a dir, excluding a subdir (short forms: r, -l, -x)
-bin/lint.sh r -l shell -x path/to/dir/vendor path/to/dir
+# installs as needed, then lints one language in a dir, excluding a subdir (short forms: -l, -x)
+bin/lint.sh -l shell -x path/to/dir/vendor path/to/dir
+
+# shows only the languages that fail (the `quiet` input)
+bin/lint.sh run -q
 ```
 
 Local runs read their settings from the config file. They also read the same

@@ -2,19 +2,21 @@
 #
 # Detects which languages are present, installs pinned linters for them, and runs them.
 #
-# Usage: lint <command> [options] [path...]
+# Usage: lint [command] [options] [path...]
 #
 # Commands:
-#   r, run       lint
-#   d, detect    print the languages to lint, as JSON
-#   i, install   install the linters the languages need
-#   v, versions  print each tool's version (and the runtimes' settings, for the action)
+#   run       lint (without a command: run --install; give it explicitly to lint a path named
+#             like a command, or to lint without installing)
+#   detect    print the languages to lint, as JSON
+#   install   install the linters the languages need
+#   versions  print each tool's version (and the runtimes' settings, for the action)
 #
 # Options:
 #   -c, --config-file FILE   settings file (default: .composite-lint.yml in the repo root, if
 #                            present)
 #   -i, --install            with run: install first
 #   -l, --languages a,b      languages to lint, instead of detecting them
+#   -q, --quiet              with run: show only the languages that fail (the quiet setting)
 #   -x, --exclude PATHSPEC   exclude files (repeatable, or comma-separated)
 #   -h, --help
 #
@@ -64,15 +66,13 @@ if [[ -n ${LINT_PYTHON:-} ]]; then
 fi
 
 die() {
-  local message="${*}"
-  readonly message
+  local -r message="${*}"
   echo "lint: ${message}" >&2
   exit 2
 }
 
 warn() {
-  local message="${*}"
-  readonly message
+  local -r message="${*}"
   if [[ -n ${GITHUB_ACTIONS:-} ]]; then
     echo "::warning::${message}"
   else
@@ -82,8 +82,7 @@ warn() {
 
 # Like die, but leaves it to the caller to carry on
 error() {
-  local message="${*}"
-  readonly message
+  local -r message="${*}"
   if [[ -n ${GITHUB_ACTIONS:-} ]]; then
     echo "::error::${message}"
   else
@@ -91,26 +90,10 @@ error() {
   fi
 }
 
-group() {
-  local title="${*}"
-  readonly title
-  if [[ -n ${GITHUB_ACTIONS:-} ]]; then
-    echo "::group::${title}"
-  else
-    echo "== ${title} =="
-  fi
-}
-
-endgroup() {
-  if [[ -n ${GITHUB_ACTIONS:-} ]]; then
-    echo '::endgroup::'
-  fi
-}
 
 # Splits on whitespace and commas without globbing, e.g. `split ARR "${value}"`
 split() {
-  local array="${1}" text="${2}"
-  readonly array text
+  local -r array="${1}" text="${2}"
   IFS=$' \t\n,' read -r -d '' -a "${array}" <<<"${text}" || true
 }
 
@@ -121,23 +104,21 @@ trim() {
 }
 
 abspath() {
-  local path="${1}"
-  readonly path
+  local -r path="${1}"
   echo "$(cd "$(dirname "${path}")" && pwd)/$(basename "${path}")"
 }
 
 # --- versions and configs ---
 
 env_key() {
-  local name="${1}"
-  readonly name
+  local -r name="${1}"
   echo "LINT_$(echo "${name}" | tr '[:lower:]-' '[:upper:]_')"
 }
 
 # First non-blank, non-comment line
 read_version_file() {
-  local file="${1}" line
-  readonly file
+  local -r file="${1}"
+  local line
   while IFS= read -r line || [[ -n ${line} ]]; do
     line="$(trim "${line%%#*}")"
     if [[ -n ${line} ]]; then
@@ -150,22 +131,22 @@ read_version_file() {
 # The repo's own version file for a tool, if it has one in its root: .<tool>-version, like pyenv's
 # .python-version and tfenv's .terraform-version (and the bundled versions/)
 repo_version_file() {
-  local tool="${1}"
-  readonly tool
+  local -r tool="${1}"
   if [[ -f ${TOP}/.${tool}-version ]]; then
     echo "${TOP}/.${tool}-version"
   fi
 }
 
 version() {
-  local tool="${1}" key raw file repo_file v
+  local -r tool="${1}"
+  local key raw file repo_file v
   key="$(env_key "${tool}")"
   raw="${key}_VERSION"
   raw="${!raw:-}"
   file="${key}_VERSION_FILE"
   file="${!file:-}"
   repo_file="$(repo_version_file "${tool}")"
-  readonly tool key raw file repo_file
+  readonly key raw file repo_file
 
   if [[ -n ${raw} && -n ${file} ]]; then
     die "set only one of ${key}_VERSION and ${key}_VERSION_FILE"
@@ -195,8 +176,7 @@ version() {
 }
 
 bundled_config() {
-  local tool="${1}"
-  readonly tool
+  local -r tool="${1}"
   case ${tool} in
     actionlint) echo actionlint.yml ;;
     flake8) echo flake8.ini ;;
@@ -213,8 +193,7 @@ bundled_config() {
 # Where each tool looks for a config by default, in its own order of precedence. Only the repo root
 # is checked, rather than per directory, and not the user's home directory.
 repo_configs() {
-  local tool="${1}"
-  readonly tool
+  local -r tool="${1}"
   case ${tool} in
     actionlint) echo .github/actionlint.yaml .github/actionlint.yml ;;
     flake8) echo setup.cfg tox.ini .flake8 ;;
@@ -233,8 +212,8 @@ repo_configs() {
 
 # The repo's own config for a tool, if it has one
 repo_config() {
-  local tool="${1}" file
-  readonly tool
+  local -r tool="${1}"
+  local file
   for file in $(repo_configs "${tool}"); do
     if [[ ! -f ${TOP}/${file} ]]; then
       continue
@@ -251,8 +230,8 @@ repo_config() {
 # Absolute path to the config to use: the input, else the repo's own, else the bundled one, else
 # nothing
 config() {
-  local tool="${1}" var path repo bundled
-  readonly tool
+  local -r tool="${1}"
+  local var path repo bundled
   var="$(env_key "${tool}")_CONFIG"
   path="${!var:-}"
   repo="$(repo_config "${tool}")"
@@ -273,7 +252,7 @@ config() {
 # config-file, github-token)
 config_keys() {
   local tool
-  echo languages paths exclude include-hidden include-ignored
+  echo languages paths exclude include-hidden include-ignored quiet
   for tool in go java python terraform; do
     echo "${tool}-version ${tool}-version-file"
   done
@@ -286,9 +265,10 @@ config_keys() {
 # relative to the repo root, so they're made absolute (and paths/exclude become git pathspecs from
 # the root).
 load_config() {
-  local file="${1}" keys line key value var items item pathspecs
+  local -r file="${1}"
+  local keys line key value var items item pathspecs
   keys=" $(config_keys | tr '\n' ' ') "
-  readonly file keys
+  readonly keys
 
   while IFS= read -r line || [[ -n ${line} ]]; do
     line="$(trim "${line%%#*}")"
@@ -329,8 +309,7 @@ load_config() {
 # --- tool installation ---
 
 tools_for() {
-  local lang="${1}"
-  readonly lang
+  local -r lang="${1}"
   case ${lang} in
     actions) echo actionlint shellcheck zizmor ;;
     docker) echo hadolint ;;
@@ -346,15 +325,15 @@ tools_for() {
 }
 
 is_pip() {
-  local tool="${1}"
-  readonly tool
+  local -r tool="${1}"
   [[ ${PIP_TOOLS} == *" ${tool} "* ]]
 }
 
 tool_dir() {
-  local tool="${1}" v
+  local -r tool="${1}"
+  local v
   v="$(version "${tool}")"
-  readonly tool v
+  readonly v
   if is_pip "${tool}"; then
     echo "${CACHE}/venv/${tool}-${v}/bin"
   else
@@ -374,9 +353,8 @@ platform() {
 
 # Takes the release tag; some asset names use the version without its `v`
 binary_url() {
-  local tool="${1}" tag="${2}"
-  local v="${tag#v}" gh=https://github.com
-  readonly tool tag v gh
+  local -r tool="${1}" tag="${2}"
+  local -r v="${tag#v}" gh=https://github.com
   case ${tool} in
     actionlint)
       echo "${gh}/rhysd/actionlint/releases/download/${tag}/actionlint_${v}_${OS}_${ARCH}.tar.gz" ;;
@@ -410,16 +388,16 @@ binary_url() {
 # no checksum verification; a checksum fetched from the same release only catches corruption.
 # Pin hashes per version in versions/ if supply-chain verification is needed.
 install_binary() {
-  local tool="${1}" tag="${2}" url tmp
-  local dest="${CACHE}/tools/${tool}/${tag}"
-  readonly tool tag dest
+  local -r tool="${1}" tag="${2}"
+  local -r dest="${CACHE}/tools/${tool}/${tag}"
   [[ -x ${dest}/${tool} ]] && return
+
+  local url tmp
+  tmp="$(mktemp -d)" || return 1
   url="$(binary_url "${tool}" "${tag}")"
-  readonly url
+  readonly tmp url
   echo "Installing ${tool} ${tag} from ${url}"
 
-  tmp="$(mktemp -d)" || return 1
-  readonly tmp
   if ! curl -fsSL "${url}" -o "${tmp}/download"; then
     rm -rf "${tmp}"
     return 1
@@ -442,9 +420,8 @@ install_binary() {
 }
 
 install_pip() {
-  local tool="${1}" tool_version="${2}"
-  local venv="${CACHE}/venv/${tool}-${tool_version}"
-  readonly tool tool_version venv
+  local -r tool="${1}" tool_version="${2}"
+  local -r venv="${CACHE}/venv/${tool}-${tool_version}"
   # A venv breaks if the Python it was made from has gone (e.g. after an upgrade) or it's lost
   # files, so check the tool actually runs
   if [[ -x ${venv}/bin/${tool} ]] && "${venv}/bin/${tool}" --version >/dev/null 2>&1; then
@@ -478,8 +455,7 @@ selected_tools() {
 }
 
 install_path() {
-  local tool="${1}" tool_version="${2}"
-  readonly tool tool_version
+  local -r tool="${1}" tool_version="${2}"
   if is_pip "${tool}"; then
     echo "${CACHE}/venv/${tool}-${tool_version}"
   else
@@ -518,8 +494,7 @@ install_tools() {
 }
 
 runtimes_for() {
-  local lang="${1}"
-  readonly lang
+  local -r lang="${1}"
   case ${lang} in
     go) echo go ;;
     kotlin) echo java ;;
@@ -528,8 +503,7 @@ runtimes_for() {
 }
 
 need() {
-  local program="${1}"
-  readonly program
+  local -r program="${1}"
   command -v "${program}" >/dev/null && return
   error "${program} not found; run 'bin/lint.sh install' or put it on the PATH"
   return 1
@@ -538,8 +512,8 @@ need() {
 # Puts the installed version of each of a language's tools first on the PATH, falling back to
 # whatever's already there. Fails if anything the language needs is missing.
 setup_language() {
-  local lang="${1}" tool dir status=0
-  readonly lang
+  local -r lang="${1}"
+  local tool dir status=0
   for tool in $(tools_for "${lang}"); do
     dir="$(tool_dir "${tool}")"
     if [[ -d ${dir} ]]; then
@@ -574,16 +548,15 @@ validate_inputs() {
 }
 
 is_selected() {
-  local lang="${1}"
-  readonly lang
+  local -r lang="${1}"
   [[ " ${SELECTED[*]} " == *" ${lang} "* ]]
 }
 
 # A runtime's version setting, for the action's setup-<runtime> step: its version or its version
 # file
 runtime_setting() {
-  local runtime="${1}" default_file="${2}" key raw file
-  readonly runtime default_file
+  local -r runtime="${1}" default_file="${2}"
+  local key raw file
   key="$(env_key "${runtime}")"
   raw="${key}_VERSION"
   raw="${!raw:-}"
@@ -647,15 +620,15 @@ print_versions() {
 # where `*` matches within a directory and `**` across them, and also excludes everything under what
 # it matches (so e.g. **/node_modules covers node_modules/ at any depth).
 exclude_pathspecs() {
-  local exclude="${1}" magic=exclude
-  local path="${exclude}"
+  local -r exclude="${1}"
+  local magic=exclude path="${exclude}"
   # combined with any magic it already has, e.g. the config's :(top)
   if [[ ${exclude} == ':('* ]]; then
     magic+=",${exclude#:(}"
     magic="${magic%%)*}"
     path="${exclude#*)}"
   fi
-  readonly exclude path
+  readonly path
 
   # git never lists anything in .git anyway, and before 2.56, excluding a path shorter than the
   # paths being listed could read out of bounds and list nothing at all
@@ -674,8 +647,8 @@ exclude_pathspecs() {
 # INCLUDE_IGNORED, but then only hidden ones (any part of the path starting with `.`) if
 # INCLUDE_HIDDEN
 list_files() {
-  local pathspecs=("${@}") ignored
-  readonly pathspecs
+  local -r pathspecs=("${@}")
+  local ignored
   git ls-files -co --exclude-standard -- "${pathspecs[@]}" || return 1
   if [[ ${INCLUDE_IGNORED} == false ]]; then
     return
@@ -744,16 +717,16 @@ collect_files() {
 }
 
 is_shell_script() {
-  local file="${1}" line
+  local -r file="${1}"
+  local line
   IFS= read -r line <"${file}" || true
-  readonly file line
+  readonly line
   [[ ${line} =~ ^#!.*[/[:space:]](ba|da|k)?sh([[:space:]]|$) ]]
 }
 
 matches() {
-  local lang="${1}" file="${2}"
-  local base="${file##*/}"
-  readonly lang file base
+  local -r lang="${1}" file="${2}"
+  local -r base="${file##*/}"
   case ${lang} in
     actions)
       case ${file} in
@@ -773,8 +746,8 @@ matches() {
 }
 
 files_for() {
-  local lang="${1}" f
-  readonly lang
+  local -r lang="${1}"
+  local f
   LANG_FILES=()
   if [[ ${lang} == go ]]; then
     while IFS= read -r f; do
@@ -823,8 +796,8 @@ select_languages() {
 }
 
 print_json() {
-  local items=("${@}") sep='' item
-  readonly items
+  local -r items=("${@}")
+  local sep='' item
   printf '['
   for item in "${items[@]}"; do
     printf '%s"%s"' "${sep}" "${item}"
@@ -839,11 +812,11 @@ print_json() {
 # equivalent (see self_discovery). The rest always get LANG_FILES: yamllint and flake8 would lint
 # gitignored dirs like .venv, and neither hadolint nor shellcheck searches directories.
 
-# Whether tools can be given the paths to search themselves: only when they're all directories (e.g.
-# pre-commit passes every file, which zizmor rejects unless it's YAML), and they'd find the same
-# files. They follow .gitignore, so not when linting ignored files, nor with custom excludes or a
-# configured scope, which they wouldn't know about. (The default excludes are things git ignores
-# anyway.)
+# Whether tools can be given the paths to search themselves: only when they're all directories
+# (e.g., pre-commit passes every file, which zizmor rejects unless it's YAML), and they'd find the
+# same files. They follow .gitignore, so not when linting ignored files, nor with custom excludes
+# or a configured scope, which they wouldn't know about. (The default excludes are things git
+# ignores anyway.)
 self_discovery() {
   local p
   if [[ ${INCLUDE_IGNORED} == true || ${CUSTOM_EXCLUDES} == true ]] || ((${#SCOPE[@]})); then
@@ -855,15 +828,14 @@ self_discovery() {
 }
 
 each() {
-  local command=("${@}")
-  readonly command
+  local -r command=("${@}")
   printf '%s\0' "${LANG_FILES[@]}" | xargs -0 "${command[@]}"
 }
 
 # For tools with no option to stay silent when they succeed: only shows their output if they fail
 quiet() {
-  local command=("${@}") output rc=0
-  readonly command
+  local -r command=("${@}")
+  local output rc=0
   output="$("${command[@]}" 2>&1)" || rc="${?}"
   readonly output rc
   if ((rc)); then
@@ -980,8 +952,8 @@ lint_kotlin() {
   each ktfmt "${flags[@]}" --dry-run --set-exit-if-changed
 }
 
-# Runs the hooks in the pre-commit config (by default, detect-private-key and check-symlinks) on the
-# files
+# Runs the hooks in the pre-commit config (by default, detect-private-key and check-symlinks) on
+# the files
 lint_pre_commit() {
   export PRE_COMMIT_HOME="${PRE_COMMIT_HOME:-${CACHE}/pre-commit}"
   readonly PRE_COMMIT_HOME
@@ -1004,9 +976,9 @@ lint_shell() {
 # Inits without a backend, keeping .terraform out of the checkout and leaving any lock file as it
 # was found
 terraform_validate() {
-  local dir="${1}" rc=0 data output lockfile_opts=()
-  local lock="${dir}/.terraform.lock.hcl"
-  readonly dir lock
+  local -r dir="${1}"
+  local -r lock="${dir}/.terraform.lock.hcl"
+  local rc=0 data output lockfile_opts=()
   if [[ -f ${lock} ]]; then
     lockfile_opts=(-lockfile=readonly)
   fi
@@ -1031,9 +1003,9 @@ terraform_validate() {
 # Every check for one directory, saving the output so parallel runs can be printed in order
 # afterwards
 terraform_dir() {
-  local dir="${1}" rc=0
-  local out="${TF_DATA_ROOT}/out/dir${dir//\//%}"
-  readonly dir out
+  local -r dir="${1}"
+  local -r out="${TF_DATA_ROOT}/out/dir${dir//\//%}"
+  local rc=0
   {
     terraform fmt -check -diff "${dir}" || rc=1
     terraform_validate "${dir}" || rc=1
@@ -1105,10 +1077,35 @@ lint_yaml() {
   each yamllint -s -c "$(config yamllint)"
 }
 
-# Runs every language even if others fail. A setup failure (status 2) outranks lint failures
-# (status 1).
+# Sets up and lints one language, returning 2 if it couldn't be set up and 1 if linting failed
+lint_language() {
+  local -r lang="${1}"
+  if ! setup_language "${lang}"; then
+    error "skipping ${lang} checks; it couldn't be set up"
+    return 2
+  fi
+  "lint_${lang//-/_}" || return 1
+}
+
+# `Linting <lang>` and dots up to 36 characters, so the results after it (PASS or FAIL) line up and
+# end the line at 40
+lint_label() {
+  local -r text="Linting ${1}"
+  local dots
+  dots="$(printf '%*s' "$((36 - ${#text}))" '')"
+  readonly dots
+  printf '%s%s' "${text}" "${dots// /.}"
+}
+
+# Runs every language even if others fail, printing `Linting <lang>...PASS` or `...FAIL` and then
+# its output. A setup failure (status 2) outranks lint failures (status 1). The output is held back
+# until the language is done, so it comes after the result; in GitHub Actions it's grouped under
+# that line. With QUIET, languages that pass aren't shown at all.
 run_linters() {
-  local lang status=0
+  local -r gha="${GITHUB_ACTIONS:-}"
+  local lang rc result status=0 out
+  out="$(mktemp)"
+  readonly out
   for lang in "${SELECTED[@]}"; do
     files_for "${lang}"
     if ! ((${#LANG_FILES[@]})); then
@@ -1116,15 +1113,36 @@ run_linters() {
       continue
     fi
 
-    group "${lang}"
-    if ! setup_language "${lang}"; then
-      error "skipping ${lang} checks; it couldn't be set up"
-      status=2
-    elif ! "lint_${lang//-/_}"; then
-      ((status)) || status=1
+    # locally, the start of the line shows what's running; a group's title has to be a whole line
+    if [[ ${QUIET} == false && -z ${gha} ]]; then
+      lint_label "${lang}"
     fi
-    endgroup
+    rc=0
+    # braces rather than a subshell, so setup_language's PATH changes carry on to the next ones
+    { lint_language "${lang}"; } >"${out}" 2>&1 || rc="${?}"
+    result=PASS
+    if ((rc)); then
+      result=FAIL
+    fi
+    if ((rc > status)); then
+      status="${rc}"
+    fi
+
+    if [[ ${QUIET} == true && ${result} == PASS ]]; then
+      continue
+    elif [[ -n ${gha} && -s ${out} ]]; then
+      echo "::group::$(lint_label "${lang}")${result}"
+      cat "${out}"
+      echo '::endgroup::'
+    else
+      if [[ ${QUIET} == true || -n ${gha} ]]; then
+        lint_label "${lang}"
+      fi
+      echo "${result}"
+      cat "${out}"
+    fi
   done
+  rm -f "${out}"
   readonly status
   return ${status}
 }
@@ -1132,8 +1150,7 @@ run_linters() {
 # --- main ---
 
 usage() {
-  local status="${1:-0}"
-  readonly status
+  local -r status="${1:-0}"
   sed -n '3,/^$/s/^# \{0,1\}//p' "${BASH_SOURCE[0]}"
   exit "${status}"
 }
@@ -1143,32 +1160,25 @@ if [[ ${LINT_NESTED:-} == true ]]; then
   exit 0
 fi
 
-command_arg="${1:-}"
-readonly command_arg
-if [[ -z ${command_arg} ]]; then
-  usage 2
-fi
-case ${command_arg} in
-  r | run) cmd=run ;;
-  d | detect) cmd=detect ;;
-  i | install) cmd=install ;;
-  v | versions) cmd=versions ;;
-  -h | --help) usage ;;
-  *)
-    echo "lint: unknown command ${command_arg}" >&2
-    usage 2
-    ;;
+# Only the first argument can be the command. Without one, the default is `run --install`, and the
+# arguments (if any) are its options and paths, so e.g. `-l yaml run` lints a path named run.
+cmd=run
+# whether run installs first
+also_install=false
+case ${1:-} in
+  run) shift ;;
+  detect | install | versions) cmd="${1}" && shift ;;
+  *) also_install=true ;;
 esac
 readonly cmd
-shift
 
-install=false
+cli_quiet=''
 config_file="${LINT_CONFIG_FILE:-}"
 cli_languages=''
 cli_excludes=()
 cli_paths=()
 while ((${#})); do
-  # an option, path, or option's value, and the next argument (the value, for options that take one)
+  # an option, path, or option value, and the next argument (the value, for options that take one)
   arg="${1}"
   value="${2:-}"
   case ${arg} in
@@ -1178,13 +1188,17 @@ while ((${#})); do
       shift 2
       ;;
     -i | --install)
-      install=true
+      also_install=true
       shift
       ;;
     -l | --languages)
       [[ -n ${value} ]] || die "${arg} needs a value"
       cli_languages="${value}"
       shift 2
+      ;;
+    -q | --quiet)
+      cli_quiet=true
+      shift
       ;;
     -x | --exclude)
       [[ -n ${value} ]] || die "${arg} needs a value"
@@ -1199,8 +1213,11 @@ while ((${#})); do
       ;;
   esac
 done
-if [[ ${install} == true && ${cmd} != run ]]; then
+if [[ ${also_install} == true && ${cmd} != run ]]; then
   die "--install only applies to run"
+fi
+if [[ -n ${cli_quiet} && ${cmd} != run ]]; then
+  die "--quiet only applies to run"
 fi
 
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "not inside a git repository"
@@ -1214,7 +1231,7 @@ if [[ -n ${config_file} ]]; then
   [[ -r ${config_file} ]] || die "config file ${config_file} not found"
   load_config "${config_file}"
 fi
-readonly install config_file cli_languages cli_excludes cli_paths
+readonly also_install cli_quiet config_file cli_languages cli_excludes cli_paths
 
 # options win over the environment and the config; LINT_LANGUAGES also accepts detect's JSON output
 if [[ -n ${cli_languages} ]]; then
@@ -1257,6 +1274,9 @@ readonly INCLUDE_IGNORED INCLUDE_HIDDEN
   die "include-hidden must be true or false, not '${INCLUDE_HIDDEN}'"
 # hidden files git doesn't ignore are always linted, so alone it would do nothing
 [[ ${INCLUDE_HIDDEN} == false || ${INCLUDE_IGNORED} == true ]] || die 'include-hidden requires include-ignored'
+QUIET="${cli_quiet:-${LINT_QUIET:-false}}"
+readonly QUIET
+[[ ${QUIET} == true || ${QUIET} == false ]] || die "quiet must be true or false, not '${QUIET}'"
 
 # Whether pre-commit is running this script as a hook, with the same config that the pre-commit
 # check would use. If so, pre-commit runs the other hooks in that config itself, so the check would
@@ -1279,7 +1299,7 @@ case ${cmd} in
   install) install_tools ;;
   run)
     # a tool that fails to install only fails the languages that need it
-    if [[ ${install} == true ]]; then
+    if [[ ${also_install} == true ]]; then
       install_tools || true
     fi
     run_linters

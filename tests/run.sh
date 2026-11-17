@@ -33,17 +33,17 @@ ln -sf missing.txt "${broken_symlink}"
 trap 'rm -f "${broken_symlink}"; rm -rf "${repo}" "${bin}"' EXIT
 
 fail() {
-  local message="${*}"
-  readonly message
+  local -r message="${*}"
   echo "FAIL: ${message}"
   failures="$((failures + 1))"
 }
 
 # Checks `lint detect`'s output for the given arguments
 detects() {
-  local description="${1}" expected="${2}" args=("${@:3}") actual
+  local -r description="${1}" expected="${2}" args=("${@:3}")
+  local actual
   actual="$("${lint}" detect "${args[@]}" 2>&1)"
-  readonly description expected args actual
+  readonly actual
   if [[ ${actual} != "${expected}" ]]; then
     fail "${description}: expected ${expected}, got ${actual}"
   else
@@ -60,9 +60,19 @@ else
   echo 'ok: tests/pass'
 fi
 
+# python passes and yaml fails, so only yaml is shown. Without a command, so run is assumed.
+output="$("${lint}" -q -l python,yaml tests/pass/python tests/fail/yaml/trailing-spaces 2>&1)"
+status="${?}"
+if [[ ${status} -ne 1 || ${output} == *'Linting python'* || ${output} != *'Linting yaml........................FAIL'*'trailing spaces'* ]]; then
+  echo "${output}"
+  fail "quiet: expected exit 1 with only the yaml group and its output, got ${status}"
+else
+  echo 'ok: quiet shows only the languages that fail'
+fi
+
 output="$(LINT_YAMLLINT_CONFIG=missing.yml "${lint}" run --languages python,yaml tests/pass 2>&1)"
 status="${?}"
-if [[ ${status} -ne 2 || ${output} == *'== python =='* ]]; then
+if [[ ${status} -ne 2 || ${output} == *'Linting python'* ]]; then
   echo "${output}"
   fail "invalid input: expected exit 2 before anything ran, got ${status}"
 else
@@ -75,7 +85,8 @@ fi
 ln -s "$(command -v git)" "${bin}/git"
 output="$(PATH="${bin}:/usr/bin:/bin" LINT_GOLANGCI_LINT_VERSION=0.0.1 "${BASH}" "${lint}" run --languages go,python tests/pass 2>&1)"
 status="${?}"
-if [[ ${status} -ne 2 || ${output} != *'skipping go'* || ${output} != *'== python =='* ]]; then
+if [[ ${status} -ne 2 || ${output} != *'Linting go..........................FAIL'*'skipping go'* ||
+  ${output} != *'Linting python......................PASS'* ]]; then
   echo "${output}"
   fail "setup isolation: expected exit 2 with go skipped and python run, got ${status}"
 else
@@ -139,10 +150,9 @@ fi
 
 # Runs the linter in the separate repo, and checks its exit status
 in_repo() {
-  local description="${1}" expected="${2}" args=("${@:3}") actual
+  local -r description="${1}" expected="${2}" args=("${@:3}")
   output="$(cd "${repo}" && "${here}/${lint}" run "${args[@]}" 2>&1)"
-  actual="${?}"
-  readonly description expected args actual
+  local -r actual="${?}"
   if ((actual != expected)); then
     echo "${output}"
     fail "${description}: expected exit ${expected}, got ${actual}"
@@ -175,6 +185,19 @@ in_repo 'ktfmt flags with --enable-editorconfig and others' 0 -l kotlin
 printf -- '--stdin-name=x.kt\n' >"${repo}/.ktfmt"
 in_repo 'ktfmt flags that stop the check' 2 -l kotlin
 rm "${repo}/two_space.kt" "${repo}/.editorconfig" "${repo}/.ktfmt"
+
+# Only the first argument is the command, so after an option, `run` is a path
+mkdir "${repo}/run"
+printf 'key: value   \n' >"${repo}/run/bad.yml"
+output="$(cd "${repo}" && "${here}/${lint}" -l yaml run 2>&1)"
+status="${?}"
+if [[ ${status} -ne 1 || ${output} != *'run/bad.yml'* ]]; then
+  echo "${output}"
+  fail "a command word after an option: expected it linted as a path, got ${status}"
+else
+  echo 'ok: a command word after an option is a path'
+fi
+rm -r "${repo}/run"
 
 # The repo's own version files, over the bundled versions. Physical path, as git reports it (macOS's
 # /var is a symlink)

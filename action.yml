@@ -22,7 +22,7 @@ inputs:
   config-file:
     description: 'Config file, with flat `key: value` lines that use the names of these inputs. The default is the .composite-lint.yml file in the repo root, if it exists.'
     required: false
-  # bin/lint.sh applies the defaults for exclude, include-hidden, and include-ignored. Thus, a
+  # bin/lint.sh applies the defaults for exclude, include-hidden, include-ignored, and quiet. Thus, a
   # config file can set them.
   exclude:
     description: 'Paths and glob patterns to exclude, separated by commas or whitespace. In a pattern, `*` matches in one directory, and `**` matches across directories. A path or pattern also excludes all of the files under each match. The default is `.git **/node_modules`. If you set this input, your value replaces the default.'
@@ -42,6 +42,9 @@ inputs:
     required: false
   paths:
     description: Paths to lint, separated by commas or whitespace. The default is the repo root.
+    required: false
+  quiet:
+    description: Whether to show only the languages that fail. If true, the action does not show the group or the output of a language that passes. The default is false.
     required: false
 
   actionlint-config:
@@ -319,6 +322,7 @@ runs:
         # Without this, a restored cache keeps every version that it ever contained.
         LINT_PRUNE: ${{ steps.tools-cache.outcome == 'success' }}
         LINT_PYTHON: ${{ steps.python.outputs.python-path }}
+        LINT_QUIET: ${{ inputs.quiet }}
         LINT_SHELLCHECK_CONFIG: ${{ inputs.shellcheck-config }}
         LINT_SHELLCHECK_VERSION: ${{ inputs.shellcheck-version }}
         LINT_SHELLCHECK_VERSION_FILE: ${{ inputs.shellcheck-version-file }}
