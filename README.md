@@ -32,7 +32,7 @@ We test the action only on Linux runners, both GitHub-hosted and self-hosted.
 
 The examples use the tag of the latest release. The releases of this action are
 immutable, so this tag cannot change. Each release updates these examples. You
-can use a floating tag like `v0`, but we do not recommend it, because it can
+can use a floating tag like `v0`, but we do not recommend it because it can
 change.
 
 The action installs only the tools that the selected `languages` need. If you
@@ -211,7 +211,7 @@ bin/lint.sh run
 bin/lint.sh run --install
 bin/lint.sh
 
-# installs as needed, then lints one language in a dir, excluding a subdir (short forms: -l, -x)
+# installs as needed, then lints one language in a dir, excluding a subdir
 bin/lint.sh -l shell -x path/to/dir/vendor path/to/dir
 
 # shows only the languages that fail (the `quiet` input)
@@ -234,11 +234,17 @@ repos:
     rev: v0.3.0
     hooks:
       - id: composite-lint
+
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c  # frozen: v6.0.0
     hooks:
       - id: check-symlinks
       - id: detect-private-key
+      # any other hooks you already use
+
+  # any other repos you already use
+
+# any other config you already use
 ```
 
 The hook installs the pinned tools when they are necessary. It lints the files
