@@ -3,8 +3,10 @@
 # Tags HEAD as the next release. The script suggests the next version from the conventional commits
 # since the newest vX.Y.Z tag that HEAD contains, then tags HEAD and pushes the tags in order:
 # latest, vX, vX.Y, and vX.Y.Z. If that moved latest, it then commits a README update on HEAD that
-# points the examples at the release, and pushes it. HEAD must be clean, with no untracked files,
-# and in sync with its upstream branch.
+# points the examples at the release, and pushes it. Last, it drafts the GitHub release, marked
+# Latest only if it moved latest, with notes listing the commits that aren't ci or docs, to publish
+# to the Marketplace from the web UI. HEAD must be clean, with no untracked files, and in sync with
+# its upstream branch. gh must be logged in.
 #
 # Usage: scripts/tag_release.sh
 #
@@ -62,6 +64,9 @@ fi
 default_branch="$(git symbolic-ref -q --short refs/remotes/origin/HEAD)" ||
   die "origin's default branch is unknown; run: git remote set-head origin --auto"
 readonly default_branch
+# also checks that gh can reach the repo before anything is tagged
+repo_url="$(gh repo view --json url --jq .url)"
+readonly repo_url
 if ! git merge-base --is-ancestor HEAD "${default_branch}"; then
   echo "Note: HEAD isn't on ${default_branch}, so this tags a release line or an unmerged branch."
 fi
@@ -85,6 +90,8 @@ echo "Commits since ${last:-the start}:"
 git log --format='  %h %s' "${log_filter[@]}" "${range}"
 # CI and docs changes alone don't change the action, though breaking ones (`ci!:`) still release
 grep -Eqv '^(ci|docs)(\([^)]*\))?:' <<<"${subjects}" || die "only ci and docs commits since ${last}"
+changes="$(grep -Ev '^(ci|docs)(\([^)]*\))?:' <<<"${subjects}" | sed 's/^/* /')"
+readonly changes
 
 IFS=. read -r major minor patch <<<"${last:-v0.0.0}"
 major="${major#v}"
@@ -144,26 +151,45 @@ git tag "${version}"
 git push -q origin "refs/tags/${version}"
 echo "Tagged and pushed ${version}"
 
-if [[ ${moved_latest} == false ]]; then
-  exit
+# Points the README examples at the newest release
+update_readme() {
+  local hooks_rev hooks_hash
+  hooks_rev="$(sed -nE 's/^[[:space:]]*rev:[[:space:]]*(.+)$/\1/p' configs/pre-commit.yaml)"
+  # without its `# frozen: vX.Y.Z` comment
+  hooks_hash="${hooks_rev%%[[:space:]]*}"
+  readonly hooks_rev hooks_hash
+
+  sed -E \
+    -e "s|(uses: ReadOnlyTech/composite-lint@).*|\1${version}|" \
+    -e "\|repo: https://github.com/ReadOnlyTech/composite-lint\$|{n;s|(rev: ).*|\1${version}|;}" \
+    -e "\|repo: https://github.com/pre-commit/pre-commit-hooks\$|{n;s|(rev: ).*|\1${hooks_rev}|;}" \
+    README.md >README.md.new
+  mv README.md.new README.md
+  if git diff --quiet HEAD -- README.md; then
+    echo "The README already uses composite-lint ${version} / pre-commit ${hooks_hash}"
+    return
+  fi
+
+  git commit -q -m "docs: use composite-lint ${version} / pre-commit ${hooks_hash} in the README examples" -- README.md
+  git push
+  echo "Pushed the README update"
+}
+
+if [[ ${moved_latest} == true ]]; then
+  update_readme
 fi
 
-hooks_rev="$(sed -nE 's/^[[:space:]]*rev:[[:space:]]*(.+)$/\1/p' configs/pre-commit.yaml)"
-# without its `# frozen: vX.Y.Z` comment
-hooks_hash="${hooks_rev%%[[:space:]]*}"
-readonly hooks_rev hooks_hash
-
-sed -E \
-  -e "s|(uses: ReadOnlyTech/composite-lint@).*|\1${version}|" \
-  -e "\|repo: https://github.com/ReadOnlyTech/composite-lint\$|{n;s|(rev: ).*|\1${version}|;}" \
-  -e "\|repo: https://github.com/pre-commit/pre-commit-hooks\$|{n;s|(rev: ).*|\1${hooks_rev}|;}" \
-  README.md >README.md.new
-mv README.md.new README.md
-if git diff --quiet HEAD -- README.md; then
-  echo "The README already uses composite-lint ${version} / pre-commit ${hooks_hash}"
-  exit
+if [[ -n ${last} ]]; then
+  changelog="${repo_url}/compare/${last}...${version}"
+else
+  changelog="${repo_url}/commits/${version}"
 fi
+readonly changelog
+# A draft, since only the web UI can publish to the Marketplace (it needs a 2FA confirmation)
+gh release create "${version}" --draft --verify-tag --title "${version}" --latest="${moved_latest}" \
+  --notes "## What's Changed
+${changes}
 
-git commit -q -m "docs: use composite-lint ${version} / pre-commit ${hooks_hash} in the README examples" -- README.md
-git push
-echo "Pushed the README update"
+
+**Full Changelog**: ${changelog}"
+echo "Drafted the ${version} release; publish it to the Marketplace from its page above"

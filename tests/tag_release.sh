@@ -88,6 +88,36 @@ readme_at() {
   fi
 }
 
+# Checks the arguments of the last GitHub release created
+github_release() {
+  local -r description="${1}" expected="${2}"
+  local actual
+  actual="$(cat "${GH_LOG}")"
+  readonly actual
+  if [[ ${actual} != "${expected}" ]]; then
+    fail "${description}: expected:
+${expected}
+got:
+${actual}"
+  else
+    echo "ok: ${description}"
+  fi
+}
+
+# A stand-in for gh, which gives the repo's URL and logs the arguments of a release
+export GH_LOG="${root}/gh-release"
+mkdir "${root}/bin"
+cat >"${root}/bin/gh" <<'EOF'
+#!/usr/bin/env bash
+if [[ ${1} == repo ]]; then
+  echo https://github.com/ReadOnlyTech/composite-lint
+else
+  printf '%s\n' "${@}" >"${GH_LOG}"
+fi
+EOF
+chmod +x "${root}/bin/gh"
+export PATH="${root}/bin:${PATH}"
+
 git init -q --bare -b main "${root}/origin.git"
 git init -q -b main "${work}"
 git -C "${work}" remote add origin "${root}/origin.git"
@@ -106,6 +136,20 @@ git -C "${work}" remote set-head origin main
 release 'the first release starts from 0.0.0' '' 0 'Pushed the README update'
 tags_at 'the first release adds every tag' main~1 latest v0 v0.1 v0.1.0
 readme_at 'the first release updates the README' v0.1.0
+github_release 'the first release links its commits' "release
+create
+v0.1.0
+--draft
+--verify-tag
+--title
+v0.1.0
+--latest=true
+--notes
+## What's Changed
+* feat: initial
+
+
+**Full Changelog**: https://github.com/ReadOnlyTech/composite-lint/commits/v0.1.0"
 release 'the README update is not a change to release' '' 1 'no commits since v0.1.0'
 
 commit 'fix: a bug'
@@ -114,6 +158,20 @@ push
 release 'fix and docs suggest a patch' '' 0 'Tagged and pushed v0.1.1'
 tags_at 'a patch moves the floating tags' main~1 latest v0 v0.1 v0.1.1
 tags_at 'a patch leaves the older release' main~4 v0.1.0
+github_release 'the release notes leave out docs' "release
+create
+v0.1.1
+--draft
+--verify-tag
+--title
+v0.1.1
+--latest=true
+--notes
+## What's Changed
+* fix: a bug
+
+
+**Full Changelog**: https://github.com/ReadOnlyTech/composite-lint/compare/v0.1.0...v0.1.1"
 
 commit 'feat(ci): thing'
 push
@@ -149,6 +207,20 @@ push
 release 'a branch off a floating tag is noted' '' 0 "HEAD isn't on origin/main"
 tags_at 'a patch on an older line moves only its vX.Y' fix-1.0 v1.0 v1.0.1
 tags_at 'a patch on an older line leaves the newer release' v1.1.0 latest v1 v1.1
+github_release "a patch on an older line isn't the latest release" "release
+create
+v1.0.1
+--draft
+--verify-tag
+--title
+v1.0.1
+--latest=false
+--notes
+## What's Changed
+* fix: backport
+
+
+**Full Changelog**: https://github.com/ReadOnlyTech/composite-lint/compare/v1.0.0...v1.0.1"
 release 'no commits since the last release' '' 1 'no commits since v1.0.1'
 commit 'feat: backported feature'
 push
