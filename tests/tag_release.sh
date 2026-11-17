@@ -170,6 +170,11 @@ release 'an untracked file' '' 1 'There are uncommitted changes or untracked fil
 rm "${work}/untracked"
 release 'a clean, pushed HEAD' '' 0 'Pushed the README update'
 readme_at 'a clean, pushed HEAD updates the README' v1.1.1
+
+commit 'docs: words'
+commit 'ci(updater): thing'
+push
+release 'only ci and docs commits' '' 1 'only ci and docs commits since v1.1.1'
 readonly failures
 
 if ((failures)); then

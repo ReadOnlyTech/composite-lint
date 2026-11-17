@@ -83,6 +83,8 @@ readonly subjects
 [[ -n ${subjects} ]] || die "no commits since ${last}"
 echo "Commits since ${last:-the start}:"
 git log --format='  %h %s' "${log_filter[@]}" "${range}"
+# CI and docs changes alone don't change the action, though breaking ones (`ci!:`) still release
+grep -Eqv '^(ci|docs)(\([^)]*\))?:' <<<"${subjects}" || die "only ci and docs commits since ${last}"
 
 IFS=. read -r major minor patch <<<"${last:-v0.0.0}"
 major="${major#v}"
