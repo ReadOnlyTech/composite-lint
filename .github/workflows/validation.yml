@@ -41,16 +41,8 @@ jobs:
       - name: Lint repo
         uses: $/
 
-      - name: Run test fixtures
-        if: ${{ !cancelled() }}
-        run: tests/run.sh
-
-      - name: Run release script tests
-        if: ${{ !cancelled() }}
-        run: tests/tag_release.sh
-
-      - name: Run tool version updater tests
+      - name: Run tests
         if: ${{ !cancelled() }}
         env:
           GH_TOKEN: ${{ github.token }}
-        run: tests/bump_tool_versions.py
+        run: tests/all.sh

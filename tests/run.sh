@@ -4,7 +4,7 @@
 #   tests/pass/            everything is detected and lints clean
 #   tests/fail/<lang>/<case>/  linting <lang> fails, with output matching the regex in <case>/expect
 #
-# Expects the tools to be installed already (bin/lint.sh install).
+# Expects the tools to be installed already (bin/lint.sh install, as tests/all.sh does).
 
 set -o pipefail
 
@@ -123,7 +123,7 @@ detects 'excluded languages' '["python"]' -lx pre-commit,woke tests/pass/python
 detects 'config excluded languages' '["python"]' -c <(echo 'exclude-languages: pre-commit woke') tests/pass/python
 detects 'option languages override config excluded languages' '["woke"]' \
   -c <(echo 'exclude-languages: woke') -l woke tests/pass/python
-LINT_EXCLUDE_LANGUAGES=woke detects 'environment excluded languages override config languages' '["python"]' \
+LINT_EXCLUDE_LANGUAGES=woke detects 'environment excluded languages override config languages' '["pre-commit","python"]' \
   -c <(echo 'languages: woke') tests/pass/python
 both='lint: set only one of languages and exclude-languages'
 detects 'option languages and excluded languages together' "${both}" -l woke -lx yaml tests/pass/python

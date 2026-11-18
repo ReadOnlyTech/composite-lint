@@ -16,6 +16,16 @@ repos:
         # otherwise it runs again at the commit-msg stage
         stages:
           - pre-commit
+      # The tests, as in CI
+      - id: tests
+        name: tests
+        entry: tests/all.sh
+        language: script
+        always_run: true
+        pass_filenames: false
+        require_serial: true
+        stages:
+          - pre-commit
   - repo: https://github.com/compilerla/conventional-pre-commit
     rev: 33b50eb042bee26eac0ee96ad84aa9c1b4dccdd8  # frozen: v4.5.0
     hooks:
