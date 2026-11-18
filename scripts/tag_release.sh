@@ -170,7 +170,8 @@ update_readme() {
     return
   fi
 
-  git commit -q -m "docs: use composite-lint ${version} / pre-commit ${hooks_version} in the README examples" -- README.md
+  # The release commit already passed the hooks, and this one only changes versions in the README
+  git commit -q --no-verify -m "docs: use composite-lint ${version} / pre-commit ${hooks_version} in the README examples" -- README.md
   git push
   echo "Pushed the README update"
 }

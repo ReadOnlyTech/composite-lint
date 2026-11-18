@@ -5,6 +5,11 @@
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 2
 
+# Git sets these for hooks, e.g. GIT_INDEX_FILE to a temporary index for `git commit -- <path>`.
+# Left set, git commands in the suites' throwaway repos would use this repo's index instead,
+# adding objects to it that this repo doesn't have.
+unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE
+
 failed=()
 
 suite() {
