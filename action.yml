@@ -247,6 +247,7 @@ runs:
         distribution: temurin
         java-version: ${{ steps.detect.outputs.java-version }}
         java-version-file: ${{ steps.detect.outputs.java-version-file }}
+        problem-matcher: true
 
     - name: Set up Terraform
       if: contains(fromJSON(steps.detect.outputs.languages), 'terraform')
