@@ -75,10 +75,10 @@ To instead use an exact set, add it to `languages`.
     persist-credentials: false
 
 - name: Run linting (strict, autodetect)
-  uses: ReadOnlyTech/composite-lint@v0.4.3
+  uses: ReadOnlyTech/composite-lint@v0.4.4
 
 - name: Run linting (custom)
-  uses: ReadOnlyTech/composite-lint@v0.4.3
+  uses: ReadOnlyTech/composite-lint@v0.4.4
   with:
     cache: false
     paths: src
@@ -232,7 +232,7 @@ This is the recommended `.pre-commit-config.yaml`:
 
 repos:
   - repo: https://github.com/ReadOnlyTech/composite-lint
-    rev: v0.4.3
+    rev: v0.4.4
     hooks:
       - id: composite-lint
 
