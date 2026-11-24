@@ -4,6 +4,66 @@ This action runs an opinionated set of linters with strict linter configs.
 
 We test the action only on Linux runners, both GitHub-hosted and self-hosted.
 
+## Supported Languages / Ecosystems
+
+### Docker
+
+Tools: `hadolint`.
+
+### GitHub Actions
+
+Tools: `actionlint`, `yamllint -s`, and `zizmor --persona auditor`. zizmor
+also does its online audits when `GH_TOKEN` or `gh auth token` gives a token.
+Note that `actionlint` uses ShellCheck with the same default config as below.
+
+### Go
+
+Tools: `golangci-lint` and `go mod tidy`.
+
+### Kotlin
+
+Tools: `ktfmt --dry-run --set-exit-if-changed`, for `.kt` and `.kts` files.
+ktfmt runs as a jar, so it needs Java. The action installs Java with
+`actions/setup-java`, which also changes the Java for the other steps of the
+job. Local runs use the `java` on the `PATH`.
+
+ktfmt has no official config file. Its linter config is a file of ktfmt flags,
+with one flag on each line. The bundled file has `--kotlinlang-style` (4-space
+indents) and `--enable-editorconfig`. Thus, by default, an `.editorconfig` file
+can change the line length, the indents, and the trailing commas. Its values
+override the values of the style flag. The flags file cannot have options that
+stop the check, such as `--stdin-name`.
+
+### Python
+
+Tools: `flake8`.
+
+### Shell
+
+Tools: `shellcheck`. The bundled linter config has the same effect as `-x`.
+
+### Terraform
+
+Tools: `terraform validate`, `terraform fmt -check -diff`, and `tflint`. The
+bundled TFLint config uses the `all` preset. The action lints each Terraform
+directory in parallel.
+
+### YAML
+
+Tools: `yamllint -s`.
+
+## Other Checks
+
+These checks are on by default. To turn one off, add it to `exclude-languages`.
+To instead use an exact set, add it to `languages`.
+
+- `pre-commit`: Runs the hooks in the file that `pre-commit-config` gives. If
+  you do not set that input, it runs the hooks in the `.pre-commit-config.yaml`
+  of the repo. If neither exists, it runs the hooks in
+  [`configs/pre-commit.yaml`](configs/pre-commit.yaml), which are
+  `detect-private-key` and `check-symlinks`.
+- [`woke`](https://github.com/get-woke/woke-action).
+
 ## Usage
 
 [`action.yml`](action.yml) lists all of the inputs.
@@ -139,66 +199,6 @@ different location, set the `config-file` input or the `-c` option.
 The `yaml-language-server` comment tells editors to use
 [`composite-lint.schema.json`](composite-lint.schema.json). The editor can
 then complete and validate the keys.
-
-## Supported Languages / Ecosystems
-
-### Docker
-
-Tools: `hadolint`.
-
-### GitHub Actions
-
-Tools: `actionlint`, `yamllint -s`, and `zizmor --persona auditor`. zizmor
-also does its online audits when `GH_TOKEN` or `gh auth token` gives a token.
-
-### Go
-
-Tools: `golangci-lint` and `go mod tidy`.
-
-### Kotlin
-
-Tools: `ktfmt --dry-run --set-exit-if-changed`, for `.kt` and `.kts` files.
-ktfmt runs as a jar, so it needs Java. The action installs Java with
-`actions/setup-java`, which also changes the Java for the other steps of the
-job. Local runs use the `java` on the `PATH`.
-
-ktfmt has no config file. Its linter config is a file of ktfmt flags, with one
-flag on each line. The bundled file has `--kotlinlang-style` (4-space indents)
-and `--enable-editorconfig`. Thus, by default, an `.editorconfig` file can
-change the line length, the indents, and the trailing commas. Its values
-override the values of the style flag. The flags file cannot have options that
-stop the check, such as `--stdin-name`.
-
-### Python
-
-Tools: `flake8`.
-
-### Shell
-
-Tools: `shellcheck`. The bundled linter config has the same effect as `-x`.
-
-### Terraform
-
-Tools: `terraform validate`, `terraform fmt -check -diff`, and `tflint`. The
-bundled TFLint config uses the `all` preset. The action lints each Terraform
-directory in parallel.
-
-### YAML
-
-Tools: `yamllint -s`.
-
-## Other Checks
-
-These checks are on by default. To turn one off, add it to `exclude-languages`.
-To instead use an exact set, add it to `languages`.
-
-- `pre-commit`: Runs the hooks in the file that `pre-commit-config` gives. If
-  you do not set that input, it runs the hooks in the `.pre-commit-config.yaml`
-  of the repo. If neither exists, it runs the hooks in
-  [`configs/pre-commit.yaml`](configs/pre-commit.yaml), which are
-  `detect-private-key` and `check-symlinks`.
-- `woke`.
-
 ## Running Locally
 
 ```sh
